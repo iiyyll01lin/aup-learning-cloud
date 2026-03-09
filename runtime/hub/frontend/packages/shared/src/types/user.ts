@@ -70,4 +70,6 @@ export interface Group {
   name: string;
   users: string[];
   properties: Record<string, unknown>;
+  source?: "github-team" | "system" | "admin";
+  resources?: string[];
 }

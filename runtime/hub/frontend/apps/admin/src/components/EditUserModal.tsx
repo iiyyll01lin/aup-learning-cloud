@@ -43,7 +43,7 @@ export function EditUserModal({ show, user, onHide, onUpdate }: Props) {
   useEffect(() => {
     if (show) {
       api.getGroups()
-        .then(groups => setAvailableGroups(groups))
+        .then(response => setAvailableGroups(response.groups))
         .catch(err => console.error('Failed to load groups:', err));
     }
   }, [show]);

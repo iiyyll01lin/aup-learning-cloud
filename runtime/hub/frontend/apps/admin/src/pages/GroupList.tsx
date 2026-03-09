@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Form, InputGroup, Alert, Spinner, Modal } from 'react-bootstrap';
+import { Table, Button, Form, InputGroup, Alert, Spinner, Modal, Badge } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 import type { MultiValue, ActionMeta, StylesConfig } from 'react-select';
 import type { Group } from '@auplc/shared';
@@ -117,6 +117,9 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
     document.documentElement.getAttribute('data-bs-theme') === 'dark'
   );
 
+  const isGitHubTeam = group.source === 'github-team';
+  const isReadOnly = group.source === 'github-team' || group.source === 'system';
+
   // Watch for theme changes
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -150,15 +153,12 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
     setIsUpdating(true);
     try {
       if (actionMeta.action === 'select-option' && actionMeta.option) {
-        // Add user to group
         await api.addUserToGroup(group.name, actionMeta.option.value);
         onMembersChange(group.name, [...group.users, actionMeta.option.value]);
       } else if (actionMeta.action === 'remove-value' && actionMeta.removedValue) {
-        // Remove user from group
         await api.removeUserFromGroup(group.name, actionMeta.removedValue.value);
         onMembersChange(group.name, group.users.filter(u => u !== actionMeta.removedValue!.value));
       } else if (actionMeta.action === 'clear') {
-        // Remove all users
         for (const user of group.users) {
           await api.removeUserFromGroup(group.name, user);
         }
@@ -173,7 +173,20 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
 
   return (
     <tr>
-      <td style={{ width: '200px', verticalAlign: 'middle' }}>{group.name}</td>
+      <td style={{ width: '200px', verticalAlign: 'middle' }}>
+        <div className="d-flex align-items-center gap-2">
+          {group.name}
+          {isGitHubTeam ? (
+            <Badge bg="dark" title="Synced from GitHub Teams">
+              <i className="bi bi-github me-1"></i>GitHub
+            </Badge>
+          ) : group.source === 'system' ? (
+            <Badge bg="info" title="System-managed group">System</Badge>
+          ) : (
+            <Badge bg="secondary" title="Manually managed group">Manual</Badge>
+          )}
+        </div>
+      </td>
       <td>
         <AsyncSelect<UserOption, true>
           isMulti
@@ -182,16 +195,31 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
           value={currentMembers}
           loadOptions={loadOptions}
           onChange={handleChange}
-          isDisabled={isUpdating}
+          isDisabled={isUpdating || isReadOnly}
+          isClearable={!isReadOnly}
           isLoading={isUpdating}
-          placeholder="Type to search and add users..."
+          placeholder={isReadOnly ? (isGitHubTeam ? 'Members synced from GitHub' : 'System-managed members') : 'Type to search and add users...'}
           noOptionsMessage={({ inputValue }) =>
             inputValue ? 'No users found' : 'Type to search users'
           }
           loadingMessage={() => 'Searching...'}
           menuPortalTarget={document.body}
           styles={getSelectStyles(isDark)}
+          {...(isReadOnly && {
+            components: { MultiValueRemove: () => null },
+          })}
         />
+      </td>
+      <td style={{ verticalAlign: 'middle' }}>
+        {group.resources && group.resources.length > 0 ? (
+          <div className="d-flex flex-wrap gap-1">
+            {group.resources.map(r => (
+              <Badge key={r} bg="info" className="fw-normal">{r}</Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-muted small">--</span>
+        )}
       </td>
       <td style={{ width: '120px', verticalAlign: 'middle' }}>
         <Button
@@ -210,6 +238,7 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
 export function GroupList() {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [githubOrg, setGithubOrg] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -233,8 +262,9 @@ export function GroupList() {
     try {
       setLoading(true);
       setError(null);
-      const groupList = await api.getGroups();
-      setGroups(groupList);
+      const response = await api.getGroups();
+      setGroups(response.groups);
+      setGithubOrg(response.github_org || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load groups');
     } finally {
@@ -343,6 +373,17 @@ export function GroupList() {
           <Button variant="dark" onClick={() => setShowCreateModal(true)}>
             Create Group
           </Button>
+          {githubOrg && (
+            <Button
+              variant="outline-dark"
+              as="a"
+              href={`https://github.com/orgs/${githubOrg}/teams`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <i className="bi bi-github me-1"></i>Manage Teams
+            </Button>
+          )}
         </div>
         <div className="d-flex gap-2">
           <Button
@@ -360,6 +401,20 @@ export function GroupList() {
           </Button>
         </div>
       </div>
+
+      {/* Group behavior info */}
+      {githubOrg && (
+        <Alert variant="light" className="border small">
+          <i className="bi bi-info-circle me-1"></i>
+          Groups with <Badge bg="dark"><i className="bi bi-github me-1"></i>GitHub</Badge> badge are synced from{' '}
+          <a href={`https://github.com/orgs/${githubOrg}/teams`} target="_blank" rel="noopener noreferrer">
+            {githubOrg}
+          </a>{' '}
+          organization teams. Their members are managed by GitHub and cannot be modified here.
+          If a manually created group shares its name with a GitHub team, it will be automatically converted
+          to a GitHub-managed group when a team member logs in.
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError(null)}>
@@ -390,6 +445,7 @@ export function GroupList() {
           <tr>
             <th style={{ width: '200px' }}>Group Name</th>
             <th>Members</th>
+            <th style={{ width: '200px' }}>Resources</th>
             <th style={{ width: '120px' }}>Actions</th>
           </tr>
         </thead>

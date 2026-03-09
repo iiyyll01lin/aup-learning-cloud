@@ -27,11 +27,13 @@ const PropertyItem = memo(function PropertyItem({
   propKey,
   value,
   loading,
+  readOnly,
   onRemove,
 }: {
   propKey: string;
   value: unknown;
   loading: boolean;
+  readOnly: boolean;
   onRemove: (key: string) => void;
 }) {
   return (
@@ -40,14 +42,16 @@ const PropertyItem = memo(function PropertyItem({
         <Badge bg="secondary" className="me-2">{propKey}</Badge>
         <span>{String(value)}</span>
       </div>
-      <Button
-        variant="outline-danger"
-        size="sm"
-        onClick={() => onRemove(propKey)}
-        disabled={loading}
-      >
-        Remove
-      </Button>
+      {!readOnly && (
+        <Button
+          variant="outline-danger"
+          size="sm"
+          onClick={() => onRemove(propKey)}
+          disabled={loading}
+        >
+          Remove
+        </Button>
+      )}
     </ListGroup.Item>
   );
 });
@@ -67,10 +71,20 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
   const [error, setError] = useState<string | null>(null);
   const [properties, setProperties] = useState<Record<string, unknown>>({});
 
-  // Initialize state when modal opens
+  const isGitHubTeam = group?.source === 'github-team';
+  const isSystemGroup = group?.source === 'system';
+  const isUndeletable = isGitHubTeam || isSystemGroup;
+
+  // System-managed property keys that should not be shown or edited
+  const RESERVED_KEYS = new Set(['source']);
+
+  // Initialize state when modal opens (exclude reserved keys)
   const handleEnter = () => {
     if (group) {
-      setProperties({ ...group.properties });
+      const userProps = Object.fromEntries(
+        Object.entries(group.properties).filter(([k]) => !RESERVED_KEYS.has(k))
+      );
+      setProperties(userProps);
       setError(null);
     }
   };
@@ -78,6 +92,11 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
   const handleAddProperty = useCallback(() => {
     if (!newPropertyKey.trim()) {
       setError('Property key cannot be empty');
+      return;
+    }
+
+    if (RESERVED_KEYS.has(newPropertyKey)) {
+      setError(`"${newPropertyKey}" is a reserved key`);
       return;
     }
 
@@ -142,43 +161,74 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
   return (
     <Modal show={show} onHide={onHide} onEnter={handleEnter}>
       <Modal.Header closeButton>
-        <Modal.Title>Group Properties: {group.name}</Modal.Title>
+        <Modal.Title>
+          Group Properties: {group.name}
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {error && <Alert variant="danger" dismissible onClose={() => setError(null)}>{error}</Alert>}
 
+        {isGitHubTeam && (
+          <Alert variant="info" className="d-flex align-items-center gap-2">
+            <i className="bi bi-github"></i>
+            <span>Synced from GitHub Teams &mdash; membership and properties are read-only.</span>
+          </Alert>
+        )}
+
+        {isSystemGroup && (
+          <Alert variant="info">
+            System-managed group &mdash; membership and properties are read-only.
+          </Alert>
+        )}
+
+        {/* Resources (read-only, from config) */}
+        {group.resources && group.resources.length > 0 && (
+          <div className="mb-3">
+            <Form.Label className="fw-semibold">Mapped Resources</Form.Label>
+            <div className="d-flex flex-wrap gap-1">
+              {group.resources.map(r => (
+                <Badge key={r} bg="info" className="fw-normal">{r}</Badge>
+              ))}
+            </div>
+            <Form.Text className="text-muted">
+              Resource mappings are defined in values.yaml and cannot be changed from the UI.
+            </Form.Text>
+          </div>
+        )}
+
         {/* Manage Properties */}
         <div className="mb-3">
+          <Form.Label className="fw-semibold">Properties</Form.Label>
           <p className="text-muted small mb-3">
             Properties are key-value pairs that can be used to configure group behavior.
           </p>
 
           <div className="mb-3">
-            <div className="row g-2">
-              <div className="col-5">
-                <Form.Control
-                  placeholder="Key"
-                  value={newPropertyKey}
-                  onChange={(e) => setNewPropertyKey(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <div className="col-5">
-                <Form.Control
-                  placeholder="Value"
-                  value={newPropertyValue}
-                  onChange={(e) => setNewPropertyValue(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddProperty()}
-                  disabled={loading}
-                />
-              </div>
-              <div className="col-2">
-                <Button variant="dark" onClick={handleAddProperty} disabled={loading} className="w-100">
-                  Add Item
-                </Button>
+              <div className="row g-2">
+                <div className="col-5">
+                  <Form.Control
+                    placeholder="Key"
+                    value={newPropertyKey}
+                    onChange={(e) => setNewPropertyKey(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <div className="col-5">
+                  <Form.Control
+                    placeholder="Value"
+                    value={newPropertyValue}
+                    onChange={(e) => setNewPropertyValue(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddProperty()}
+                    disabled={loading}
+                  />
+                </div>
+                <div className="col-2">
+                  <Button variant="dark" onClick={handleAddProperty} disabled={loading} className="w-100">
+                    Add Item
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
 
           <ListGroup>
             {Object.keys(properties).length === 0 ? (
@@ -190,6 +240,7 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
                   propKey={key}
                   value={value}
                   loading={loading}
+                  readOnly={false}
                   onRemove={handleRemoveProperty}
                 />
               ))
@@ -198,9 +249,13 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
         </div>
       </Modal.Body>
       <Modal.Footer className="d-flex justify-content-between">
-        <Button variant="danger" onClick={handleDeleteGroup} disabled={loading}>
-          Delete Group
-        </Button>
+        {isUndeletable ? (
+          <div />
+        ) : (
+          <Button variant="danger" onClick={handleDeleteGroup} disabled={loading}>
+            Delete Group
+          </Button>
+        )}
         <div>
           <Button variant="dark" onClick={handleApply} disabled={loading} className="me-2">
             {loading ? 'Saving...' : 'Save'}

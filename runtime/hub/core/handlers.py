@@ -59,6 +59,7 @@ _handler_config: dict[str, Any] = {
     "quota_enabled": False,
     "minimum_quota_to_start": 10,
     "default_quota": 0,
+    "team_resource_mapping": {},
 }
 
 
@@ -68,6 +69,8 @@ def configure_handlers(
     quota_enabled: bool = False,
     minimum_quota_to_start: int = 10,
     default_quota: int = 0,
+    team_resource_mapping: dict[str, list[str]] | None = None,
+    github_org: str = "",
 ) -> None:
     """Configure handler module with runtime settings."""
     if accelerator_options is not None:
@@ -77,6 +80,9 @@ def configure_handlers(
     _handler_config["quota_enabled"] = quota_enabled
     _handler_config["minimum_quota_to_start"] = minimum_quota_to_start
     _handler_config["default_quota"] = default_quota
+    if team_resource_mapping is not None:
+        _handler_config["team_resource_mapping"] = team_resource_mapping
+    _handler_config["github_org"] = github_org
 
 
 # =============================================================================
@@ -1159,6 +1165,198 @@ class GitHubReposHandler(APIHandler):
 
 
 # =============================================================================
+# Group Management API Handlers
+# =============================================================================
+
+
+class GroupsAPIHandler(APIHandler):
+    """Admin API handler for listing groups with enriched source and resources info."""
+
+    @web.authenticated
+    async def get(self):
+        if not self.current_user.admin:
+            raise web.HTTPError(403, "Admin access required")
+
+        from jupyterhub.orm import Group as ORMGroup
+
+        team_resource_mapping = _handler_config.get("team_resource_mapping", {})
+        orm_groups = self.db.query(ORMGroup).order_by(ORMGroup.name).all()
+
+        # Backfill source for known system groups
+        from core.groups import SYSTEM_SOURCE
+
+        for g in orm_groups:
+            if g.name == "native-users" and not g.properties.get("source"):
+                g.properties = {**g.properties, "source": SYSTEM_SOURCE}
+                self.db.commit()
+
+        groups = []
+        for g in orm_groups:
+            source = g.properties.get("source", "admin")
+            resources = team_resource_mapping.get(g.name, [])
+            groups.append(
+                {
+                    "name": g.name,
+                    "users": [u.name for u in g.users],
+                    "properties": dict(g.properties),
+                    "source": source,
+                    "resources": resources,
+                }
+            )
+
+        github_org = _handler_config.get("github_org", "")
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps({"groups": groups, "github_org": github_org}))
+
+
+class GroupDetailAPIHandler(APIHandler):
+    """Admin API handler for a single group with protection for github-team groups."""
+
+    @web.authenticated
+    async def delete(self, group_name):
+        if not self.current_user.admin:
+            raise web.HTTPError(403, "Admin access required")
+
+        from jupyterhub.orm import Group as ORMGroup
+
+        orm_group = self.db.query(ORMGroup).filter_by(name=group_name).first()
+        if not orm_group:
+            raise web.HTTPError(404, f"Group '{group_name}' not found")
+
+        from core.groups import is_undeletable_group
+
+        if is_undeletable_group(orm_group):
+            raise web.HTTPError(403, "Cannot delete a protected group")
+
+        self.db.delete(orm_group)
+        self.db.commit()
+        self.set_status(204)
+
+    @web.authenticated
+    async def patch(self, group_name):
+        if not self.current_user.admin:
+            raise web.HTTPError(403, "Admin access required")
+
+        from jupyterhub.orm import Group as ORMGroup
+
+        orm_group = self.db.query(ORMGroup).filter_by(name=group_name).first()
+        if not orm_group:
+            raise web.HTTPError(404, f"Group '{group_name}' not found")
+
+        body = json.loads(self.request.body)
+        if "properties" in body:
+            new_props = body["properties"]
+            # Preserve system-managed reserved keys
+            reserved_keys = ("source",)
+            for key in reserved_keys:
+                existing = orm_group.properties.get(key)
+                if existing is not None:
+                    new_props[key] = existing
+            orm_group.properties = new_props
+            self.db.commit()
+
+        team_resource_mapping = _handler_config.get("team_resource_mapping", {})
+        source = orm_group.properties.get("source", "admin")
+        resources = team_resource_mapping.get(orm_group.name, [])
+
+        self.write(
+            json.dumps(
+                {
+                    "name": orm_group.name,
+                    "users": [u.name for u in orm_group.users],
+                    "properties": dict(orm_group.properties),
+                    "source": source,
+                    "resources": resources,
+                }
+            )
+        )
+
+
+class GroupMembersAPIHandler(APIHandler):
+    """Admin API handler for group membership with protection for github-team groups."""
+
+    @web.authenticated
+    async def post(self, group_name):
+        if not self.current_user.admin:
+            raise web.HTTPError(403, "Admin access required")
+
+        from jupyterhub.orm import Group as ORMGroup
+
+        orm_group = self.db.query(ORMGroup).filter_by(name=group_name).first()
+        if not orm_group:
+            raise web.HTTPError(404, f"Group '{group_name}' not found")
+
+        from core.groups import is_readonly_group
+
+        if is_readonly_group(orm_group):
+            raise web.HTTPError(403, "Cannot modify members of a protected group")
+
+        body = json.loads(self.request.body)
+        usernames = body.get("users", [])
+
+        from jupyterhub.orm import User as ORMUser
+
+        for username in usernames:
+            user = self.db.query(ORMUser).filter_by(name=username).first()
+            if user and user not in orm_group.users:
+                orm_group.users.append(user)
+        self.db.commit()
+
+        team_resource_mapping = _handler_config.get("team_resource_mapping", {})
+        self.write(
+            json.dumps(
+                {
+                    "name": orm_group.name,
+                    "users": [u.name for u in orm_group.users],
+                    "properties": dict(orm_group.properties),
+                    "source": orm_group.properties.get("source", "admin"),
+                    "resources": team_resource_mapping.get(orm_group.name, []),
+                }
+            )
+        )
+
+    @web.authenticated
+    async def delete(self, group_name):
+        if not self.current_user.admin:
+            raise web.HTTPError(403, "Admin access required")
+
+        from jupyterhub.orm import Group as ORMGroup
+
+        orm_group = self.db.query(ORMGroup).filter_by(name=group_name).first()
+        if not orm_group:
+            raise web.HTTPError(404, f"Group '{group_name}' not found")
+
+        from core.groups import is_readonly_group
+
+        if is_readonly_group(orm_group):
+            raise web.HTTPError(403, "Cannot modify members of a protected group")
+
+        body = json.loads(self.request.body)
+        usernames = body.get("users", [])
+
+        from jupyterhub.orm import User as ORMUser
+
+        for username in usernames:
+            user = self.db.query(ORMUser).filter_by(name=username).first()
+            if user and user in orm_group.users:
+                orm_group.users.remove(user)
+        self.db.commit()
+
+        team_resource_mapping = _handler_config.get("team_resource_mapping", {})
+        self.write(
+            json.dumps(
+                {
+                    "name": orm_group.name,
+                    "users": [u.name for u in orm_group.users],
+                    "properties": dict(orm_group.properties),
+                    "source": orm_group.properties.get("source", "admin"),
+                    "resources": team_resource_mapping.get(orm_group.name, []),
+                }
+            )
+        )
+
+
+# =============================================================================
 # Handler Registration
 # =============================================================================
 
@@ -1181,6 +1379,10 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/admin/api/set-password", AdminAPISetPasswordHandler),
         (r"/admin/api/batch-set-password", AdminAPIBatchSetPasswordHandler),
         (r"/admin/api/generate-password", AdminAPIGeneratePasswordHandler),
+        # Group management API
+        (r"/admin/api/groups/?", GroupsAPIHandler),
+        (r"/admin/api/groups/([^/]+)/?", GroupDetailAPIHandler),
+        (r"/admin/api/groups/([^/]+)/users/?", GroupMembersAPIHandler),
         # Accelerator info API
         (r"/api/accelerators", AcceleratorsAPIHandler),
         # Resources API
@@ -1220,6 +1422,10 @@ __all__ = [
     "UserQuotaInfoHandler",
     "ResourcesAPIHandler",
     "GitHubReposHandler",
+    # Group management handlers
+    "GroupsAPIHandler",
+    "GroupDetailAPIHandler",
+    "GroupMembersAPIHandler",
     # Configuration
     "configure_handlers",
     # Registration
