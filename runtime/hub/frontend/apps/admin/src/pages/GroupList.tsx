@@ -251,6 +251,9 @@ export function GroupList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [showInfo, setShowInfo] = useState(() =>
+    localStorage.getItem('grouplist-hide-info') !== '1'
+  );
 
   // Debounce search input
   useEffect(() => {
@@ -353,6 +356,7 @@ export function GroupList() {
       setSyncResult(
         `Sync complete: ${result.synced} synced, ${result.failed} failed, ${result.skipped} skipped`
       );
+      setTimeout(() => setSyncResult(null), 5000);
       await loadGroups();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sync groups');
@@ -395,7 +399,7 @@ export function GroupList() {
           {githubOrg && (
             <>
               <Button
-                variant="outline-dark"
+                variant="outline-secondary"
                 onClick={handleSync}
                 disabled={syncing}
               >
@@ -406,7 +410,7 @@ export function GroupList() {
                 )}
               </Button>
               <Button
-                variant="outline-dark"
+                variant="outline-secondary"
                 as="a"
                 href={`https://github.com/orgs/${githubOrg}/teams`}
                 target="_blank"
@@ -414,6 +418,15 @@ export function GroupList() {
               >
                 <i className="bi bi-github me-1"></i>Manage Teams
               </Button>
+              {!showInfo && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => { setShowInfo(true); localStorage.removeItem('grouplist-hide-info'); }}
+                  title="Show group info"
+                >
+                  <i className="bi bi-info-circle"></i>
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -435,8 +448,8 @@ export function GroupList() {
       </div>
 
       {/* Group behavior info */}
-      {githubOrg && (
-        <Alert variant="light" className="border small">
+      {githubOrg && showInfo && (
+        <Alert variant="light" className="border small" dismissible onClose={() => { setShowInfo(false); localStorage.setItem('grouplist-hide-info', '1'); }}>
           <i className="bi bi-info-circle me-1"></i>
           Groups with <Badge bg="dark"><i className="bi bi-github me-1"></i>GitHub</Badge> badge are synced from{' '}
           <a href={`https://github.com/orgs/${githubOrg}/teams`} target="_blank" rel="noopener noreferrer">

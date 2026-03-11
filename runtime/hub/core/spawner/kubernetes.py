@@ -183,36 +183,25 @@ class RemoteLabKubeSpawner(KubeSpawner):
         return ["none"]
 
     async def options_form(self, _) -> str:
-        """Generate the HTML form for resource selection."""
+        """Generate the HTML form for resource selection.
+
+        Returns a <script> tag that injects ``window.AVAILABLE_RESOURCES``
+        and ``window.SINGLE_NODE_MODE`` for the React spawn app.  The custom
+        ``spawn.html`` template renders this via ``{{ spawner_options_form | safe }}``.
+        """
         try:
             available_resource_names = await self.get_user_resources()
             self.log.debug(f"Providing users with following resources: {available_resource_names}")
 
-            # Use template path
-            template_path = os.environ.get("JUPYTERHUB_TEMPLATE_PATH", "/srv/jupyterhub/templates")
-            template_file = os.path.join(template_path, "resource_options_form.html")
+            available_resources_js = json.dumps(available_resource_names)
+            single_node_mode_js = "true" if self.single_node_mode else "false"
 
-            if os.path.exists(template_file):
-                with open(template_file, encoding="utf-8") as f:
-                    html_content = f.read()
-
-                # Inject available resources and config from backend
-                available_resources_js = json.dumps(available_resource_names)
-                single_node_mode_js = "true" if self.single_node_mode else "false"
-                injection_script = f"""
-<script>
-    window.AVAILABLE_RESOURCES = {available_resources_js};
-    window.SINGLE_NODE_MODE = {single_node_mode_js};
-</script>
-</head>"""
-
-                html_content = html_content.replace("</head>", injection_script)
-
-                self.log.debug(f"Successfully loaded template from {template_file}")
-                return html_content
-            else:
-                self.log.debug(f"Failed to load template from {template_file}, Fall back to basic form.")
-                return self._generate_fallback_form(available_resource_names)
+            return (
+                "<script>"
+                f"window.AVAILABLE_RESOURCES={available_resources_js};"
+                f"window.SINGLE_NODE_MODE={single_node_mode_js};"
+                "</script>"
+            )
 
         except Exception as e:
             self.log.error(f"Failed to load options form: {e}", exc_info=True)
