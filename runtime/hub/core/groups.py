@@ -194,18 +194,20 @@ def get_resources_for_user(
 
 
 def is_readonly_group(group: ORMGroup) -> bool:
-    """Check if a group is read-only (managed by GitHub Teams or the system).
+    """Check if a group's membership is fully read-only.
 
-    Read-only groups cannot have their members, properties, or existence
-    modified through the admin UI or API.
+    Only system-managed groups are fully read-only.  GitHub-team groups
+    allow manual member additions (admins can add native users to grant
+    them the same resources).  Synced GitHub members are auto-managed:
+    they may be re-added or removed on the next login sync.
 
     Args:
         group: JupyterHub ORM Group object.
 
     Returns:
-        True if the group's source is "github-team" or "system".
+        True if the group's source is "system".
     """
-    return group.properties.get("source") in (GITHUB_TEAM_SOURCE, SYSTEM_SOURCE)
+    return group.properties.get("source") == SYSTEM_SOURCE
 
 
 def is_undeletable_group(group: ORMGroup) -> bool:

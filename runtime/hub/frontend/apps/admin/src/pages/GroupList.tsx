@@ -118,7 +118,7 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
   );
 
   const isGitHubTeam = group.source === 'github-team';
-  const isReadOnly = group.source === 'github-team' || group.source === 'system';
+  const isReadOnly = group.source === 'system';
 
   // Watch for theme changes
   useEffect(() => {
@@ -198,7 +198,7 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
           isDisabled={isUpdating || isReadOnly}
           isClearable={!isReadOnly}
           isLoading={isUpdating}
-          placeholder={isReadOnly ? (isGitHubTeam ? 'Members synced from GitHub' : 'System-managed members') : 'Type to search and add users...'}
+          placeholder={isReadOnly ? 'System-managed members' : (isGitHubTeam ? 'Add users (synced members are auto-managed)...' : 'Type to search and add users...')}
           noOptionsMessage={({ inputValue }) =>
             inputValue ? 'No users found' : 'Type to search users'
           }
@@ -410,7 +410,8 @@ export function GroupList() {
           <a href={`https://github.com/orgs/${githubOrg}/teams`} target="_blank" rel="noopener noreferrer">
             {githubOrg}
           </a>{' '}
-          organization teams. Their members are managed by GitHub and cannot be modified here.
+          organization teams. Synced members are auto-managed by GitHub, but you can manually add
+          users (e.g. native users) to grant them the same resources.
           Sync occurs when a user starts a server &mdash; changes may not appear until the next spawn.
           If a manually created group shares its name with a GitHub team, it will be automatically converted
           to a GitHub-managed group when a team member logs in. Use &quot;Release Protection&quot; in group

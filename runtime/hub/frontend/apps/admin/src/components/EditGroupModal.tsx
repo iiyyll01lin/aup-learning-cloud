@@ -197,7 +197,10 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
         {isGitHubTeam && (
           <Alert variant="info" className="d-flex align-items-center gap-2">
             <i className="bi bi-github"></i>
-            <span>Synced from GitHub Teams &mdash; membership is read-only.</span>
+            <span>
+              Members are auto-synced from GitHub Teams. You can add users manually,
+              but synced members may be re-added or removed on the next login.
+            </span>
           </Alert>
         )}
 
