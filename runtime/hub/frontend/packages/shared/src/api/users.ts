@@ -194,7 +194,7 @@ export async function deleteGroup(groupName: string): Promise<void> {
 
 export async function updateGroup(
   groupName: string,
-  data: { properties?: Record<string, unknown> }
+  data: { properties?: Record<string, unknown>; release_protection?: boolean }
 ): Promise<Group> {
   return adminApiRequest<Group>(`/groups/${encodeURIComponent(groupName)}`, {
     method: "PATCH",

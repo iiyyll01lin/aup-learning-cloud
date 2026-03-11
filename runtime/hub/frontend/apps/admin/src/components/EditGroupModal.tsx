@@ -22,6 +22,9 @@ import { Modal, Button, Form, ListGroup, Alert, Badge } from 'react-bootstrap';
 import type { Group } from '@auplc/shared';
 import * as api from '@auplc/shared';
 
+// System-managed property keys that should not be shown or edited
+const RESERVED_KEYS = new Set(['source']);
+
 // Memoized property list item
 const PropertyItem = memo(function PropertyItem({
   propKey,
@@ -73,10 +76,7 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
 
   const isGitHubTeam = group?.source === 'github-team';
   const isSystemGroup = group?.source === 'system';
-  const isUndeletable = isGitHubTeam || isSystemGroup;
-
-  // System-managed property keys that should not be shown or edited
-  const RESERVED_KEYS = new Set(['source']);
+  const isProtected = isGitHubTeam || isSystemGroup;
 
   // Initialize state when modal opens (exclude reserved keys)
   const handleEnter = () => {
@@ -156,6 +156,32 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
     }
   };
 
+  const handleReleaseProtection = async () => {
+    if (!group) return;
+
+    const sourceLabel = isGitHubTeam ? 'GitHub-synced' : 'system-managed';
+    if (!window.confirm(
+      `Release protection on "${group.name}"?\n\n` +
+      `This will convert it from a ${sourceLabel} group to a manually managed group. ` +
+      `Members will become editable and the group can be deleted.\n\n` +
+      `Note: If a GitHub team with this name still exists, the group will be re-protected when a team member logs in.`
+    )) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      await api.updateGroup(group.name, { release_protection: true });
+      onUpdate();
+      onHide();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to release protection');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!group) return null;
 
   return (
@@ -171,13 +197,13 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
         {isGitHubTeam && (
           <Alert variant="info" className="d-flex align-items-center gap-2">
             <i className="bi bi-github"></i>
-            <span>Synced from GitHub Teams &mdash; membership and properties are read-only.</span>
+            <span>Synced from GitHub Teams &mdash; membership is read-only.</span>
           </Alert>
         )}
 
         {isSystemGroup && (
           <Alert variant="info">
-            System-managed group &mdash; membership and properties are read-only.
+            System-managed group &mdash; membership is read-only.
           </Alert>
         )}
 
@@ -249,8 +275,15 @@ export function EditGroupModal({ show, group, onHide, onUpdate, onDelete }: Prop
         </div>
       </Modal.Body>
       <Modal.Footer className="d-flex justify-content-between">
-        {isUndeletable ? (
-          <div />
+        {isProtected ? (
+          <Button
+            variant="outline-warning"
+            onClick={handleReleaseProtection}
+            disabled={loading}
+            title="Convert to a manually managed group"
+          >
+            Release Protection
+          </Button>
         ) : (
           <Button variant="danger" onClick={handleDeleteGroup} disabled={loading}>
             Delete Group

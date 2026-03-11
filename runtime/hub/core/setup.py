@@ -85,6 +85,14 @@ def setup_hub(c: Any) -> None:
     c.JupyterHub.spawner_class = RemoteLabKubeSpawner
 
     # =========================================================================
+    # Pre-create System Groups
+    # =========================================================================
+    # Ensure system-managed groups exist at startup (before any user logs in).
+    # Note: load_groups does NOT set properties on existing groups, so the
+    # source=system backfill is handled lazily in the admin groups API handler.
+    c.JupyterHub.load_groups = {"native-users": []}
+
+    # =========================================================================
     # Configure Authenticator
     # =========================================================================
 

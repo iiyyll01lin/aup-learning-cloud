@@ -411,8 +411,10 @@ export function GroupList() {
             {githubOrg}
           </a>{' '}
           organization teams. Their members are managed by GitHub and cannot be modified here.
+          Sync occurs when a user starts a server &mdash; changes may not appear until the next spawn.
           If a manually created group shares its name with a GitHub team, it will be automatically converted
-          to a GitHub-managed group when a team member logs in.
+          to a GitHub-managed group when a team member logs in. Use &quot;Release Protection&quot; in group
+          properties to convert a protected group back to manual management.
         </Alert>
       )}
 

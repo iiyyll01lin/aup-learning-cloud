@@ -162,31 +162,6 @@ def assign_user_to_group(
         log.info("Added user '%s' to group '%s'", user.name, group_name)
 
 
-def ensure_system_group(group_name: str, db: object) -> None:
-    """Ensure a system-managed group exists with source=system.
-
-    Called during hub startup to guarantee system groups are always present
-    and properly tagged, even before any user logs in.
-
-    Args:
-        group_name: Name of the system group.
-        db: JupyterHub database session.
-    """
-    from jupyterhub.orm import Group as ORMGroup
-
-    orm_group = db.query(ORMGroup).filter_by(name=group_name).first()
-    if orm_group is None:
-        orm_group = ORMGroup(name=group_name)
-        orm_group.properties = {"source": SYSTEM_SOURCE}
-        db.add(orm_group)
-        db.commit()
-        log.info("Created system group '%s' on startup", group_name)
-    elif not orm_group.properties.get("source"):
-        orm_group.properties = {**orm_group.properties, "source": SYSTEM_SOURCE}
-        db.commit()
-        log.info("Backfilled source=system on group '%s'", group_name)
-
-
 def get_resources_for_user(
     user: JupyterHubUser,
     team_resource_mapping: dict[str, list[str]],

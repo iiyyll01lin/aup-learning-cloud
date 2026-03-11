@@ -1182,7 +1182,8 @@ class GroupsAPIHandler(APIHandler):
         team_resource_mapping = _handler_config.get("team_resource_mapping", {})
         orm_groups = self.db.query(ORMGroup).order_by(ORMGroup.name).all()
 
-        # Backfill source for known system groups
+        # Lazy backfill: load_groups creates the group at startup but can't
+        # set properties on existing groups. Tag it here on first admin access.
         from core.groups import SYSTEM_SOURCE
 
         for g in orm_groups:
@@ -1244,7 +1245,12 @@ class GroupDetailAPIHandler(APIHandler):
             raise web.HTTPError(404, f"Group '{group_name}' not found")
 
         body = json.loads(self.request.body)
-        if "properties" in body:
+
+        # Release protection: convert a protected group to admin-managed
+        if body.get("release_protection"):
+            orm_group.properties = {k: v for k, v in orm_group.properties.items() if k != "source"}
+            self.db.commit()
+        elif "properties" in body:
             new_props = body["properties"]
             # Preserve system-managed reserved keys
             reserved_keys = ("source",)
