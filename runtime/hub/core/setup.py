@@ -113,21 +113,30 @@ def setup_hub(c: Any) -> None:
             return
         spawner.github_access_token = auth_state.get("access_token")
 
-        # Sync GitHub teams to JupyterHub groups
-        github_teams = auth_state.get("github_teams")
-        if github_teams is not None:
-            try:
-                from core.groups import sync_user_github_teams
+        # Sync GitHub teams to JupyterHub groups.
+        # Always fetch fresh teams from GitHub at spawn time so that team
+        # membership changes (add/remove) are reflected without requiring
+        # the user to log out and back in.
+        if spawner.user.name.startswith("github:"):
+            access_token = auth_state.get("access_token")
+            if access_token and config.github_org_name:
+                try:
+                    from core.groups import fetch_github_teams, sync_user_github_teams
 
-                valid_mapping_keys = set(config.teams.mapping.keys())
-                sync_user_github_teams(
-                    spawner.user,
-                    github_teams,
-                    valid_mapping_keys,
-                    spawner.user.db,
-                )
-            except Exception as e:
-                print(f"[GROUPS] Warning: Failed to sync GitHub teams for {spawner.user.name}: {e}")
+                    github_teams = await fetch_github_teams(access_token, config.github_org_name)
+                    valid_mapping_keys = set(config.teams.mapping.keys())
+                    sync_user_github_teams(
+                        spawner.user,
+                        github_teams,
+                        valid_mapping_keys,
+                        spawner.user.db,
+                    )
+                    # Update cached teams in auth_state so refresh_user()
+                    # retains the latest team list across token refreshes.
+                    auth_state["github_teams"] = github_teams
+                    await spawner.user.save_auth_state(auth_state)
+                except Exception as e:
+                    print(f"[GROUPS] Warning: Failed to sync GitHub teams for {spawner.user.name}: {e}")
         elif not spawner.user.name.startswith("github:"):
             # Native user with auth_state but no GitHub teams
             try:
