@@ -249,6 +249,8 @@ export function GroupList() {
   const [newGroupName, setNewGroupName] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -342,6 +344,23 @@ export function GroupList() {
     }
   };
 
+  const handleSync = useCallback(async () => {
+    try {
+      setSyncing(true);
+      setSyncResult(null);
+      setError(null);
+      const result = await api.syncGroups();
+      setSyncResult(
+        `Sync complete: ${result.synced} synced, ${result.failed} failed, ${result.skipped} skipped`
+      );
+      await loadGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync groups');
+    } finally {
+      setSyncing(false);
+    }
+  }, [loadGroups]);
+
   const handleCloseEditModal = useCallback(() => {
     setShowEditModal(false);
     setSelectedGroup(null);
@@ -374,15 +393,28 @@ export function GroupList() {
             Create Group
           </Button>
           {githubOrg && (
-            <Button
-              variant="outline-dark"
-              as="a"
-              href={`https://github.com/orgs/${githubOrg}/teams`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <i className="bi bi-github me-1"></i>Manage Teams
-            </Button>
+            <>
+              <Button
+                variant="outline-dark"
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                {syncing ? (
+                  <><Spinner animation="border" size="sm" className="me-1" />Syncing...</>
+                ) : (
+                  <><i className="bi bi-arrow-repeat me-1"></i>Sync Now</>
+                )}
+              </Button>
+              <Button
+                variant="outline-dark"
+                as="a"
+                href={`https://github.com/orgs/${githubOrg}/teams`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <i className="bi bi-github me-1"></i>Manage Teams
+              </Button>
+            </>
           )}
         </div>
         <div className="d-flex gap-2">
@@ -414,6 +446,7 @@ export function GroupList() {
           users (e.g. native users) to grant them the same resources.
           Team data is captured at login, and group membership is updated when the user starts a server
           &mdash; changes on GitHub may not appear until the user re-logs in and spawns.
+          Use &quot;Sync Now&quot; to immediately refresh all users&apos; team memberships.
           If a manually created group shares its name with a GitHub team, it will be automatically converted
           to a GitHub-managed group when a team member logs in and spawns. Use &quot;Release Protection&quot; in group
           properties to convert a protected group back to manual management.
@@ -423,6 +456,12 @@ export function GroupList() {
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {syncResult && (
+        <Alert variant="success" dismissible onClose={() => setSyncResult(null)}>
+          {syncResult}
         </Alert>
       )}
 

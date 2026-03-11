@@ -1371,6 +1371,54 @@ class GroupMembersAPIHandler(APIHandler):
         )
 
 
+class GroupSyncAPIHandler(APIHandler):
+    """Admin API handler to manually trigger GitHub team sync for all users."""
+
+    @web.authenticated
+    async def post(self):
+        if not self.current_user.admin:
+            raise web.HTTPError(403, "Admin access required")
+
+        github_org = _handler_config.get("github_org", "")
+        if not github_org:
+            raise web.HTTPError(400, "No GitHub organization configured")
+
+        from core.groups import fetch_github_teams, sync_user_github_teams
+
+        team_resource_mapping = _handler_config.get("team_resource_mapping", {})
+        valid_mapping_keys = set(team_resource_mapping.keys())
+
+        synced = 0
+        failed = 0
+        skipped = 0
+
+        for user in self.users.values():
+            if not user.name.startswith("github:"):
+                skipped += 1
+                continue
+
+            try:
+                auth_state = await user.get_auth_state()
+                if not auth_state or "access_token" not in auth_state:
+                    skipped += 1
+                    continue
+
+                access_token = auth_state["access_token"]
+                teams = await fetch_github_teams(access_token, github_org)
+                sync_user_github_teams(user, teams, valid_mapping_keys, self.db)
+
+                # Update auth_state so next spawn uses fresh data
+                auth_state["github_teams"] = teams
+                await user.save_auth_state(auth_state)
+
+                synced += 1
+            except Exception:
+                self.log.warning("Failed to sync teams for %s", user.name, exc_info=True)
+                failed += 1
+
+        self.write(json.dumps({"synced": synced, "failed": failed, "skipped": skipped}))
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -1396,6 +1444,7 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/admin/api/generate-password", AdminAPIGeneratePasswordHandler),
         # Group management API
         (r"/admin/api/groups/?", GroupsAPIHandler),
+        (r"/admin/api/groups/sync/?", GroupSyncAPIHandler),
         (r"/admin/api/groups/([^/]+)/?", GroupDetailAPIHandler),
         (r"/admin/api/groups/([^/]+)/users/?", GroupMembersAPIHandler),
         # Accelerator info API

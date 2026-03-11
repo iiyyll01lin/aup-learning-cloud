@@ -176,6 +176,18 @@ export async function getGroups(): Promise<GroupsResponse> {
   return adminApiRequest<GroupsResponse>("/groups");
 }
 
+export interface SyncGroupsResponse {
+  synced: number;
+  failed: number;
+  skipped: number;
+}
+
+export async function syncGroups(): Promise<SyncGroupsResponse> {
+  return adminApiRequest<SyncGroupsResponse>("/groups/sync", {
+    method: "POST",
+  });
+}
+
 export async function getGroup(groupName: string): Promise<Group> {
   return apiRequest<Group>(`/groups/${encodeURIComponent(groupName)}`);
 }
