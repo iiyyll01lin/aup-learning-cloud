@@ -55,6 +55,20 @@ custom:
     enabled: false
 
   # ============================================================================
+  # Allowed Origins
+  # ============================================================================
+  # hub.allowedOrigins      — sets Access-Control-Allow-Origin on Hub HTTP responses
+  # notebook.allowedOrigins — injected into each notebook server's startup args
+  #                           (--ServerApp.allow_origin_pat); handles kernel WebSocket
+  #
+  # Use ["*"] to allow all, or list specific domains.
+  # Example: ["https://mylab.example.com", "https://alt.example.org"]
+  hub:
+    allowedOrigins: []
+  notebook:
+    allowedOrigins: []
+
+  # ============================================================================
   # Git Repository Cloning
   # ============================================================================
   # Users can provide an optional Git URL on the spawn form; the repo will be

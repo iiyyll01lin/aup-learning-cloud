@@ -60,6 +60,16 @@ c = get_config()  # noqa: F821
 
 setup_hub(c)
 
+# Hub allowed origins: set CORS headers on the Hub's Tornado server
+_hub_config = HubConfig.get()
+_hub_allowed_origins = _hub_config.hub_network.allowedOrigins
+if _hub_allowed_origins:
+    _origin_val = "*" if "*" in _hub_allowed_origins else ", ".join(_hub_allowed_origins)
+    _ts = dict(c.JupyterHub.tornado_settings or {})
+    _ts.setdefault("headers", {})["Access-Control-Allow-Origin"] = _origin_val
+    c.JupyterHub.tornado_settings = _ts
+    print(f"[CONFIG] Hub allowedOrigins: {_hub_allowed_origins}")
+
 # =============================================================================
 # Z2JH Standard Configuration (Kubernetes-specific)
 # =============================================================================

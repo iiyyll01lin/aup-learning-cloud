@@ -59,6 +59,17 @@ custom:
   teams:
     mapping: {}
 
+  # Hub-level allowed origins: sets Access-Control-Allow-Origin on Hub HTTP
+  # responses. Useful when the Hub API is accessed cross-origin.
+  hub:
+    allowedOrigins: []
+
+  # Notebook server allowed origins: injected into each notebook server's
+  # startup args via --ServerApp.allow_origin_pat.
+  # Needed when kernel WebSocket connections go through a reverse proxy.
+  notebook:
+    allowedOrigins: []
+
   # User quota management system
   quota:
     # Enable/disable quota system (auto-disabled for auto-login/dummy modes if not set)
