@@ -19,6 +19,7 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { NavBar } from '../components/NavBar';
 import { Table, Button, Form, InputGroup, Alert, Spinner, Modal, Badge } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 import type { MultiValue, ActionMeta, StylesConfig } from 'react-select';
@@ -418,6 +419,7 @@ export function GroupList() {
 
   return (
     <div>
+      <NavBar />
       {/* Top Controls */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex gap-2">

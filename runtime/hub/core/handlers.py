@@ -41,6 +41,7 @@ from pydantic import ValidationError
 from tornado import web
 
 from core.authenticators import CustomFirstUseAuthenticator
+from core.stats_handlers import StatsDistributionHandler, StatsOverviewHandler, StatsUsageHandler
 from core.quota import (
     BatchQuotaRequest,
     QuotaAction,
@@ -1464,6 +1465,12 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/admin/api/quota/([^/]+)", QuotaAPIHandler),
         (r"/api/quota/rates", QuotaRatesAPIHandler),
         (r"/api/quota/me", UserQuotaInfoHandler),
+        # Usage stats API
+        (r"/admin/api/stats/overview", StatsOverviewHandler),
+        (r"/admin/api/stats/usage", StatsUsageHandler),
+        (r"/admin/api/stats/distribution", StatsDistributionHandler),
+        # Dashboard UI
+        (r"/admin/dashboard", AdminUIHandler),
     ]
 
 

@@ -22,3 +22,4 @@ export * from "./quota.js";
 export * from "./accelerator.js";
 export * from "./resource.js";
 export * from "./hub.js";
+export * from "./stats.js";

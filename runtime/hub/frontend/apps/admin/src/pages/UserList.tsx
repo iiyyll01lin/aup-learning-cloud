@@ -19,6 +19,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { NavBar } from '../components/NavBar';
 import { Table, Button, Form, InputGroup, Badge, Spinner, Alert, ButtonGroup, Modal } from 'react-bootstrap';
 import type { User, UserQuota, Server } from '@auplc/shared';
 import * as api from '@auplc/shared';
@@ -766,6 +767,7 @@ export function UserList() {
 
   return (
     <div>
+      <NavBar />
       {/* Top Controls */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="d-flex gap-2">

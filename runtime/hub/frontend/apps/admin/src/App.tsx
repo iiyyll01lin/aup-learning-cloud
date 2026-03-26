@@ -21,6 +21,7 @@ import { Container } from 'react-bootstrap';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserList } from './pages/UserList';
 import { GroupList } from './pages/GroupList';
+import { Dashboard } from './pages/Dashboard';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
@@ -37,6 +38,7 @@ function App() {
         <Routes>
           <Route path="/users" element={<UserList />} />
           <Route path="/groups" element={<GroupList />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
         </Routes>
       </Container>

@@ -312,13 +312,17 @@ class QuotaManager:
                 "quota_consumed": quota_consumed,
             }
 
-    def end_usage_session(self, session_id: int, quota_rates: dict[str, int]) -> tuple[int, int]:
+    def end_usage_session(self, session_id: int, quota_rates: dict[str, int] | None = None) -> tuple[int, int]:
         """
-        End a usage session and calculate quota consumed.
+        End a usage session and optionally deduct quota.
+
+        Always records session duration. Quota deduction only happens when
+        quota_rates is provided (quota system is enabled).
 
         Args:
             session_id: The session ID to end
-            quota_rates: Mapping of resource_type to quota rate per minute
+            quota_rates: Mapping of resource_type to quota rate per minute.
+                         Pass None to skip quota deduction (usage tracking only).
 
         Returns:
             Tuple of (duration_minutes, quota_consumed)
@@ -331,32 +335,33 @@ class QuotaManager:
             end_time = datetime.now()
             duration_minutes = int((end_time - usage_session.start_time).total_seconds() / 60)
 
-            # Calculate quota based on resource type and duration
-            rate = quota_rates.get(usage_session.resource_type, 1)
-            quota_consumed = duration_minutes * rate
-
             usage_session.end_time = end_time
             usage_session.duration_minutes = duration_minutes
-            usage_session.quota_consumed = quota_consumed
             usage_session.status = "completed"
 
-            # Deduct quota from user balance
-            if quota_consumed > 0:
-                user = session.query(UserQuota).filter(UserQuota.username == usage_session.username).first()
-                if user and not user.unlimited:
-                    balance_before = user.balance
-                    user.balance = max(0, balance_before - quota_consumed)
+            quota_consumed = 0
+            if quota_rates is not None:
+                # Calculate and deduct quota
+                rate = quota_rates.get(usage_session.resource_type, 1)
+                quota_consumed = duration_minutes * rate
+                usage_session.quota_consumed = quota_consumed
 
-                    transaction = QuotaTransaction(
-                        username=usage_session.username,
-                        amount=-quota_consumed,
-                        transaction_type="usage",
-                        resource_type=usage_session.resource_type,
-                        balance_before=balance_before,
-                        balance_after=user.balance,
-                        description=f"Session {session_id}: {duration_minutes} min @ {rate}/min",
-                    )
-                    session.add(transaction)
+                if quota_consumed > 0:
+                    user = session.query(UserQuota).filter(UserQuota.username == usage_session.username).first()
+                    if user and not user.unlimited:
+                        balance_before = user.balance
+                        user.balance = max(0, balance_before - quota_consumed)
+
+                        transaction = QuotaTransaction(
+                            username=usage_session.username,
+                            amount=-quota_consumed,
+                            transaction_type="usage",
+                            resource_type=usage_session.resource_type,
+                            balance_before=balance_before,
+                            balance_after=user.balance,
+                            description=f"Session {session_id}: {duration_minutes} min @ {rate}/min",
+                        )
+                        session.add(transaction)
 
             return (duration_minutes, quota_consumed)
 
