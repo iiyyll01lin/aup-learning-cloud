@@ -13,6 +13,7 @@ import {
   getUsageTimeSeries,
   getDistribution,
   createActiveSessionsSSE,
+  stopServer,
 } from '@auplc/shared';
 import type {
   DashboardOverview,
@@ -20,6 +21,7 @@ import type {
   ResourceDistribution,
   TopUser,
   ActiveSession,
+  PendingSpawn,
 } from '@auplc/shared';
 
 const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'];
@@ -81,14 +83,18 @@ export function Dashboard() {
   const [byResource, setByResource] = useState<ResourceDistribution[]>([]);
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [pendingSpawns, setPendingSpawns] = useState<PendingSpawn[]>([]);
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
-  // SSE: live active sessions
+  // SSE: live active sessions + pending spawns
   useEffect(() => {
-    const es = createActiveSessionsSSE(setActiveSessions);
+    const es = createActiveSessionsSSE(({ active_sessions, pending_spawns }) => {
+      setActiveSessions(active_sessions);
+      setPendingSpawns(pending_spawns);
+    });
     return () => es.close();
   }, []);
 
@@ -189,44 +195,87 @@ export function Dashboard() {
             />
           </div>
 
-          {/* Active Now */}
-          <div className="bg-body border tw:rounded-xl tw:shadow-sm tw:p-5 tw:mb-4">
-            <div className="tw:flex tw:items-center tw:gap-2 tw:mb-3">
-              <h6 className="text-body-secondary tw:font-semibold tw:mb-0">Active Now</h6>
-              <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-emerald-600 tw:font-medium">
-                <span className="tw:inline-block tw:w-2 tw:h-2 tw:rounded-full tw:bg-emerald-500 tw:animate-pulse" />
-                Live
-              </span>
-              <span className="badge bg-secondary tw:ml-auto">{activeSessions.length}</span>
-            </div>
-            {activeSessions.length === 0 ? (
-              <p className="text-body-secondary tw:text-sm tw:text-center tw:py-4">No active sessions</p>
-            ) : (
-              <table className="table table-sm table-hover mb-0">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Course</th>
-                    <th>Started</th>
-                    <th>Elapsed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeSessions.map((s, i) => (
-                    <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setSelectedUser(s.username)}>
-                      <td>
-                        <span className="tw:text-indigo-600 tw:font-medium">
-                          <i className="bi bi-person me-1" />{s.username}
-                        </span>
-                      </td>
-                      <td><code>{s.resource_type}</code></td>
-                      <td className="text-body-secondary tw:text-xs">{s.start_time.slice(0, 16).replace('T', ' ')}</td>
-                      <td>{formatMinutes(s.elapsed_minutes)}</td>
+          {/* Active Now + Pending Spawns */}
+          <div className="tw:grid tw:grid-cols-1 tw:gap-4 tw:mb-4 lg:tw:grid-cols-3">
+            {/* Active Now */}
+            <div className="bg-body border tw:rounded-xl tw:shadow-sm tw:p-5 lg:tw:col-span-2">
+              <div className="tw:flex tw:items-center tw:gap-2 tw:mb-3">
+                <h6 className="text-body-secondary tw:font-semibold tw:mb-0">Active Now</h6>
+                <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-emerald-600 tw:font-medium">
+                  <span className="tw:inline-block tw:w-2 tw:h-2 tw:rounded-full tw:bg-emerald-500 tw:animate-pulse" />
+                  Live
+                </span>
+                <span className="badge bg-secondary tw:ml-auto">{activeSessions.length}</span>
+              </div>
+              {activeSessions.length === 0 ? (
+                <p className="text-body-secondary tw:text-sm tw:text-center tw:py-4">No active sessions</p>
+              ) : (
+                <table className="table table-sm table-hover mb-0">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Course</th>
+                      <th>Started</th>
+                      <th>Elapsed</th>
+                      <th></th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {activeSessions.map((s, i) => (
+                      <tr key={i} className={s.idle_warning ? 'table-warning' : ''}>
+                        <td style={{ cursor: 'pointer' }} onClick={() => setSelectedUser(s.username)}>
+                          <span className="tw:text-indigo-600 tw:font-medium">
+                            <i className="bi bi-person me-1" />{s.username}
+                          </span>
+                        </td>
+                        <td><code>{s.resource_type}</code></td>
+                        <td className="text-body-secondary tw:text-xs">{s.start_time.slice(0, 16).replace('T', ' ')}</td>
+                        <td>
+                          {s.idle_warning && <i className="bi bi-exclamation-triangle-fill text-warning me-1" title="Possibly idle" />}
+                          {formatMinutes(s.elapsed_minutes)}
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-outline-danger btn-sm tw:py-0"
+                            title="Stop server"
+                            onClick={() => stopServer(s.username).catch(() => {})}
+                          >
+                            <i className="bi bi-stop-fill" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Pending Spawns */}
+            <div className="bg-body border tw:rounded-xl tw:shadow-sm tw:p-5">
+              <div className="tw:flex tw:items-center tw:gap-2 tw:mb-3">
+                <h6 className="text-body-secondary tw:font-semibold tw:mb-0">Spawning</h6>
+                <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-amber-600 tw:font-medium">
+                  <span className="tw:inline-block tw:w-2 tw:h-2 tw:rounded-full tw:bg-amber-500 tw:animate-pulse" />
+                  Live
+                </span>
+                <span className="badge bg-secondary tw:ml-auto">{pendingSpawns.length}</span>
+              </div>
+              {pendingSpawns.length === 0 ? (
+                <p className="text-body-secondary tw:text-sm tw:text-center tw:py-4">No pending spawns</p>
+              ) : (
+                <div className="tw:flex tw:flex-col tw:gap-2">
+                  {pendingSpawns.map((p, i) => (
+                    <div key={i} className="tw:flex tw:items-center tw:justify-between tw:text-sm">
+                      <span className="text-body">
+                        <i className="bi bi-hourglass-split text-warning me-1" />
+                        {p.username}
+                      </span>
+                      <span className="text-body-secondary tw:text-xs">{formatMinutes(p.waiting_minutes)} waiting</span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Usage trend — full width */}
@@ -255,16 +304,18 @@ export function Dashboard() {
               <p className="text-body-secondary tw:text-sm tw:text-center tw:py-10">No data for this period</p>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={dailyUsage} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                <LineChart data={dailyUsage} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--bs-border-color)" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--bs-body-color)' }} tickFormatter={d => d.slice(5)} />
-                  <YAxis tick={{ fontSize: 11, fill: 'var(--bs-body-color)' }} />
+                  <YAxis yAxisId="minutes" tick={{ fontSize: 11, fill: 'var(--bs-body-color)' }} />
+                  <YAxis yAxisId="users" orientation="right" tick={{ fontSize: 11, fill: 'var(--bs-body-color)' }} />
                   <Tooltip
-                    formatter={(v) => [`${v} min`, 'Usage']}
+                    formatter={(v, name) => name === 'Minutes' ? [`${v} min`, name] : [v, name]}
                     contentStyle={{ backgroundColor: 'var(--bs-body-bg)', border: '1px solid var(--bs-border-color)', color: 'var(--bs-body-color)' }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="minutes" stroke="#6366f1" strokeWidth={2} dot={false} name="Minutes" />
+                  <Line yAxisId="minutes" type="monotone" dataKey="minutes" stroke="#6366f1" strokeWidth={2} dot={false} name="Minutes" />
+                  <Line yAxisId="users" type="monotone" dataKey="users" stroke="#10b981" strokeWidth={2} dot={false} name="Active Users" />
                 </LineChart>
               </ResponsiveContainer>
             )}

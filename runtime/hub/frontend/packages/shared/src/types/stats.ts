@@ -12,6 +12,7 @@ export interface DailyUsage {
   date: string;
   minutes: number;
   sessions: number;
+  users: number;
 }
 
 export interface ResourceDistribution {
@@ -27,6 +28,13 @@ export interface ActiveSession {
   resource_type: string;
   start_time: string;
   elapsed_minutes: number;
+  idle_warning: boolean;
+}
+
+export interface PendingSpawn {
+  username: string;
+  started: string;
+  waiting_minutes: number;
 }
 
 export interface TopUser {

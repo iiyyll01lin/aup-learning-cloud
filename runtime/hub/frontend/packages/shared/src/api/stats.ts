@@ -25,13 +25,17 @@ export async function getUserDetail(username: string, days = 30, granularity: "d
   return adminApiRequest<UserDetail>(`/stats/user/${encodeURIComponent(username)}?days=${days}&granularity=${granularity}`);
 }
 
-export function createActiveSessionsSSE(onData: (sessions: import("../types/stats.js").ActiveSession[]) => void): EventSource {
+export function createActiveSessionsSSE(
+  onData: (payload: {
+    active_sessions: import("../types/stats.js").ActiveSession[];
+    pending_spawns: import("../types/stats.js").PendingSpawn[];
+  }) => void
+): EventSource {
   const base = (window as { jhdata?: { base_url?: string } }).jhdata?.base_url ?? '/hub/';
   const es = new EventSource(`${base}admin/api/stats/active/stream`);
   es.onmessage = (e) => {
     try {
-      const data = JSON.parse(e.data);
-      onData(data.active_sessions ?? []);
+      onData(JSON.parse(e.data));
     } catch { /* ignore parse errors */ }
   };
   return es;

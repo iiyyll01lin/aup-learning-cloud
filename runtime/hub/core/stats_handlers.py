@@ -101,7 +101,8 @@ class StatsUsageHandler(APIHandler):
                 sa.text(
                     f"SELECT {group_expr} as period, "
                     "COALESCE(SUM(duration_minutes), 0) as minutes, "
-                    "COUNT(*) as sessions "
+                    "COUNT(*) as sessions, "
+                    "COUNT(DISTINCT username) as users "
                     "FROM quota_usage_sessions "
                     "WHERE status IN ('completed', 'cleaned_up') "
                     "AND start_time >= :since "
@@ -113,7 +114,7 @@ class StatsUsageHandler(APIHandler):
 
         return {
             "daily_usage": [
-                {"date": str(row[0]), "minutes": int(row[1]), "sessions": int(row[2])}
+                {"date": str(row[0]), "minutes": int(row[1]), "sessions": int(row[2]), "users": int(row[3])}
                 for row in rows
             ]
         }
@@ -315,11 +316,16 @@ class StatsUserHandler(APIHandler):
         }
 
 
+IDLE_WARN_MINUTES = 120  # sessions longer than this are flagged as potentially idle
+
+
 def _active_sessions_data() -> dict:
     import sqlalchemy as sa
 
+    cutoff = datetime.now() - timedelta(minutes=30)
+
     with session_scope() as session:
-        rows = session.execute(
+        active_rows = session.execute(
             sa.text(
                 "SELECT q.username, q.resource_type, q.start_time "
                 "FROM quota_usage_sessions q "
@@ -328,6 +334,17 @@ def _active_sessions_data() -> dict:
                 "WHERE q.status = 'active' "
                 "ORDER BY q.start_time ASC"
             )
+        ).fetchall()
+
+        pending_rows = session.execute(
+            sa.text(
+                "SELECT u.name, s.started "
+                "FROM spawners s "
+                "JOIN users u ON u.id = s.user_id "
+                "WHERE s.server_id IS NULL AND s.started IS NOT NULL AND s.started > :cutoff "
+                "ORDER BY s.started ASC"
+            ),
+            {"cutoff": cutoff},
         ).fetchall()
 
     now = datetime.now()
@@ -340,9 +357,22 @@ def _active_sessions_data() -> dict:
                 "elapsed_minutes": int(
                     (now - datetime.fromisoformat(str(r[2]))).total_seconds() / 60
                 ),
+                "idle_warning": int(
+                    (now - datetime.fromisoformat(str(r[2]))).total_seconds() / 60
+                ) >= IDLE_WARN_MINUTES,
             }
-            for r in rows
-        ]
+            for r in active_rows
+        ],
+        "pending_spawns": [
+            {
+                "username": r[0],
+                "started": str(r[1]),
+                "waiting_minutes": int(
+                    (now - datetime.fromisoformat(str(r[1]))).total_seconds() / 60
+                ),
+            }
+            for r in pending_rows
+        ],
     }
 
 
