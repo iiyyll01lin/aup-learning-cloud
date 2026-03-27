@@ -88,10 +88,10 @@ class StatsUsageHandler(APIHandler):
     def _query(self, days: int, granularity: str):
         import sqlalchemy as sa
 
-        since = datetime.now() - timedelta(days=days)
+        now = datetime.now()
+        since = now - timedelta(days=days)
 
         if granularity == "week":
-            # SQLite: strftime('%Y-W%W', start_time) groups by ISO week
             group_expr = "strftime('%Y-W%W', start_time)"
         else:
             group_expr = "DATE(start_time)"
@@ -112,12 +112,30 @@ class StatsUsageHandler(APIHandler):
                 {"since": since},
             ).fetchall()
 
-        return {
-            "daily_usage": [
-                {"date": str(row[0]), "minutes": int(row[1]), "sessions": int(row[2]), "users": int(row[3])}
-                for row in rows
-            ]
-        }
+        by_period = {str(r[0]): (int(r[1]), int(r[2]), int(r[3])) for r in rows}
+
+        result = []
+        if granularity == "day":
+            d = since.date()
+            today = now.date()
+            while d <= today:
+                key = str(d)
+                mins, sess, users = by_period.get(key, (0, 0, 0))
+                result.append({"date": key, "minutes": mins, "sessions": sess, "users": users})
+                d += timedelta(days=1)
+        else:
+            # Iterate week by week from the Monday of the starting week
+            from datetime import date as date_type
+            d = since.date()
+            d -= timedelta(days=d.weekday())  # rewind to Monday
+            today = now.date()
+            while d <= today:
+                key = d.strftime("%Y-W%W")
+                mins, sess, users = by_period.get(key, (0, 0, 0))
+                result.append({"date": key, "minutes": mins, "sessions": sess, "users": users})
+                d += timedelta(weeks=1)
+
+        return {"daily_usage": result}
 
 
 class StatsDistributionHandler(APIHandler):
