@@ -17,6 +17,7 @@ export interface DailyUsage {
 
 export interface ResourceDistribution {
   resource_type: string;
+  resource_display?: string;
   minutes: number;
   sessions: number;
   users: number;
@@ -26,6 +27,9 @@ export interface ResourceDistribution {
 export interface ActiveSession {
   username: string;
   resource_type: string;
+  resource_display?: string;
+  accelerator_type?: string | null;
+  accelerator_display?: string | null;
   start_time: string;
   elapsed_minutes: number;
   idle_warning: boolean;
@@ -60,6 +64,9 @@ export interface HourlyUsage {
 
 export interface UserSession {
   resource_type: string;
+  resource_display?: string;
+  accelerator_type?: string | null;
+  accelerator_display?: string | null;
   start_time: string;
   end_time: string | null;
   duration_minutes: number | null;

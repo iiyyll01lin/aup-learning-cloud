@@ -51,6 +51,20 @@ function formatMinutes(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function formatResourceLabel(resourceType: string, resourceDisplay?: string | null): string {
+  if (resourceDisplay && resourceDisplay !== resourceType) {
+    return `${resourceDisplay} (${resourceType})`;
+  }
+  return resourceDisplay ?? resourceType;
+}
+
+function formatAcceleratorLabel(acceleratorType?: string | null, acceleratorDisplay?: string | null): string {
+  if (acceleratorDisplay && acceleratorDisplay !== acceleratorType) {
+    return acceleratorType ? `${acceleratorDisplay} (${acceleratorType})` : acceleratorDisplay;
+  }
+  return acceleratorDisplay ?? acceleratorType ?? '';
+}
+
 interface StatCardProps {
   title: string;
   value: string | number;
@@ -226,32 +240,57 @@ export function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeSessions.map((s, i) => (
-                      <tr key={i} className={s.idle_warning ? 'table-warning' : ''}>
-                        <td style={{ cursor: 'pointer' }} onClick={() => setSelectedUser(s.username)}>
-                          <span className="tw:text-indigo-600 tw:font-medium">
-                            <i className="bi bi-person me-1" />{s.username}
-                          </span>
-                        </td>
-                        <td><code>{s.resource_type}</code></td>
-                        <td className="text-body-secondary tw:text-xs">
-                          {new Date(s.start_time + 'Z').toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td>
-                          {s.idle_warning && <i className="bi bi-exclamation-triangle-fill text-warning me-1" title="Possibly idle" />}
-                          {formatMinutes(s.elapsed_minutes)}
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn-outline-danger btn-sm tw:py-0"
-                            title="Stop server"
-                            onClick={() => stopServer(s.username).catch(() => {})}
-                          >
-                            <i className="bi bi-stop-fill" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {activeSessions.map((s, i) => {
+                      const showResourceCode = Boolean(s.resource_display && s.resource_display !== s.resource_type);
+                      const acceleratorLabel = formatAcceleratorLabel(s.accelerator_type, s.accelerator_display);
+                      const showAcceleratorCode =
+                        Boolean(s.accelerator_display && s.accelerator_type && s.accelerator_display !== s.accelerator_type);
+                      return (
+                        <tr key={i} className={s.idle_warning ? 'table-warning' : ''}>
+                          <td style={{ cursor: 'pointer' }} onClick={() => setSelectedUser(s.username)}>
+                            <span className="tw:text-indigo-600 tw:font-medium">
+                              <i className="bi bi-person me-1" />{s.username}
+                            </span>
+                          </td>
+                          <td>
+                            <div>
+                              <span>{formatResourceLabel(s.resource_type, s.resource_display)}</span>
+                              {showResourceCode && (
+                                <span className="text-body-secondary tw:ms-2 tw:text-xs">
+                                  <code>{s.resource_type}</code>
+                                </span>
+                              )}
+                            </div>
+                            {acceleratorLabel && (
+                              <div className="text-body-secondary tw:text-xs tw:mt-1">
+                                {acceleratorLabel}
+                                {showAcceleratorCode && (
+                                  <span className="tw:ms-2">
+                                    <code>{s.accelerator_type}</code>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-body-secondary tw:text-xs">
+                            {new Date(s.start_time + 'Z').toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td>
+                            {s.idle_warning && <i className="bi bi-exclamation-triangle-fill text-warning me-1" title="Possibly idle" />}
+                            {formatMinutes(s.elapsed_minutes)}
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-outline-danger btn-sm tw:py-0"
+                              title="Stop server"
+                              onClick={() => stopServer(s.username).catch(() => {})}
+                            >
+                              <i className="bi bi-stop-fill" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -373,7 +412,7 @@ export function Dashboard() {
                               className="tw:inline-block tw:w-2 tw:h-2 tw:rounded-full tw:shrink-0"
                               style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                             />
-                            {r.resource_type}
+                            {formatResourceLabel(r.resource_type, r.resource_display)}
                           </span>
                           <span className="text-body-secondary tw:text-xs tw:shrink-0 tw:ml-2">
                             {formatMinutes(r.minutes)} · {r.sessions} sessions · avg {formatMinutes(Math.round(r.avg_minutes))}

@@ -30,7 +30,9 @@ import re
 import threading
 from datetime import datetime, timedelta
 
-from core.database import get_session, session_scope
+from sqlalchemy import inspect, text
+
+from core.database import get_engine, get_session, session_scope
 from core.quota.orm import QuotaTransaction, UsageSession, UserQuota
 
 # Re-export models for backwards compatibility
@@ -71,6 +73,35 @@ class QuotaManager:
         self._op_lock = threading.Lock()
         self._initialized = True
         print("[QUOTA] QuotaManager initialized")
+        self._ensure_schema()
+
+    def _ensure_schema(self) -> None:
+        """Ensure expected columns exist on quota tables."""
+        try:
+            engine = get_engine()
+            inspector = inspect(engine)
+            columns = {col["name"] for col in inspector.get_columns(UsageSession.__tablename__)}
+            added_column = False
+            if "accelerator_type" not in columns:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(f"ALTER TABLE {UsageSession.__tablename__} ADD COLUMN accelerator_type VARCHAR(100)")
+                    )
+                added_column = True
+                print("[QUOTA] Added accelerator_type column to quota_usage_sessions")
+
+            with engine.begin() as conn:
+                result = conn.execute(
+                    text(
+                        f"UPDATE {UsageSession.__tablename__} "
+                        "SET accelerator_type = resource_type "
+                        "WHERE accelerator_type IS NULL OR accelerator_type = ''"
+                    )
+                )
+                if added_column or (getattr(result, "rowcount", 0) or 0) > 0:
+                    print("[QUOTA] Backfilled accelerator_type on quota_usage_sessions")
+        except Exception as exc:
+            print(f"[QUOTA] Warning: failed to ensure accelerator_type column: {exc}")
 
     def get_balance(self, username: str) -> int:
         """Get user's current quota balance."""
@@ -272,13 +303,14 @@ class QuotaManager:
 
             return balance_after
 
-    def start_session(self, username: str, resource_type: str) -> int:
+    def start_session(self, username: str, resource_type: str, accelerator_type: str | None = None) -> int:
         """Start a usage session and return session ID."""
         username = username.lower()
         with session_scope() as session:
             usage_session = UsageSession(
                 username=username,
                 resource_type=resource_type,
+                accelerator_type=accelerator_type,
                 start_time=datetime.now(),
                 status="active",
             )
@@ -308,6 +340,7 @@ class QuotaManager:
                 "session_id": usage_session.id,
                 "username": usage_session.username,
                 "resource_type": usage_session.resource_type,
+                "accelerator_type": usage_session.accelerator_type,
                 "duration_minutes": int(duration),
                 "quota_consumed": quota_consumed,
             }
@@ -342,7 +375,8 @@ class QuotaManager:
             quota_consumed = 0
             if quota_rates is not None:
                 # Calculate and deduct quota
-                rate = quota_rates.get(usage_session.resource_type, 1)
+                accelerator_key = usage_session.accelerator_type or usage_session.resource_type
+                rate = quota_rates.get(accelerator_key, quota_rates.get("cpu", 1))
                 quota_consumed = duration_minutes * rate
                 usage_session.quota_consumed = quota_consumed
 
@@ -359,7 +393,9 @@ class QuotaManager:
                             resource_type=usage_session.resource_type,
                             balance_before=balance_before,
                             balance_after=user.balance,
-                            description=f"Session {session_id}: {duration_minutes} min @ {rate}/min",
+                            description=(
+                                f"Session {session_id}: {duration_minutes} min @ {accelerator_key} ({rate}/min)"
+                            ),
                         )
                         session.add(transaction)
 
@@ -382,6 +418,7 @@ class QuotaManager:
                 "session_id": usage_session.id,
                 "username": usage_session.username,
                 "resource_type": usage_session.resource_type,
+                "accelerator_type": usage_session.accelerator_type,
                 "start_time": usage_session.start_time.isoformat(),
             }
         finally:
@@ -415,6 +452,7 @@ class QuotaManager:
                         "session_id": usage_session.id,
                         "username": usage_session.username,
                         "resource_type": usage_session.resource_type,
+                        "accelerator_type": usage_session.accelerator_type,
                         "duration_minutes": duration_minutes,
                     }
                 )

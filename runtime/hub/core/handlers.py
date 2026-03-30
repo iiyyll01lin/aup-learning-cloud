@@ -41,13 +41,20 @@ from pydantic import ValidationError
 from tornado import web
 
 from core.authenticators import CustomFirstUseAuthenticator
-from core.stats_handlers import StatsActiveSSEHandler, StatsDistributionHandler, StatsHourlyHandler, StatsOverviewHandler, StatsUsageHandler, StatsUserHandler
 from core.quota import (
     BatchQuotaRequest,
     QuotaAction,
     QuotaModifyRequest,
     QuotaRefreshRequest,
     get_quota_manager,
+)
+from core.stats_handlers import (
+    StatsActiveSSEHandler,
+    StatsDistributionHandler,
+    StatsHourlyHandler,
+    StatsOverviewHandler,
+    StatsUsageHandler,
+    StatsUserHandler,
 )
 
 # =============================================================================

@@ -18,6 +18,20 @@ function formatMinutes(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function formatResourceLabel(resourceType: string, resourceDisplay?: string | null): string {
+  if (resourceDisplay && resourceDisplay !== resourceType) {
+    return `${resourceDisplay} (${resourceType})`;
+  }
+  return resourceDisplay ?? resourceType;
+}
+
+function formatAcceleratorLabel(acceleratorType?: string | null, acceleratorDisplay?: string | null): string {
+  if (acceleratorDisplay && acceleratorDisplay !== acceleratorType) {
+    return acceleratorType ? `${acceleratorDisplay} (${acceleratorType})` : acceleratorDisplay;
+  }
+  return acceleratorDisplay ?? acceleratorType ?? '';
+}
+
 interface UserDetailModalProps {
   username: string | null;
   days?: number;
@@ -118,7 +132,7 @@ export function UserDetailModal({ username, days = 30, granularity = 'day', onCl
                       className="tw:rounded-full tw:px-3 tw:py-1 tw:text-xs tw:text-white tw:font-medium"
                       style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                     >
-                      {r.resource_type} · {formatMinutes(r.minutes)} · {r.sessions} sessions
+                      {formatResourceLabel(r.resource_type, r.resource_display)} · {formatMinutes(r.minutes)} · {r.sessions} sessions
                     </span>
                   ))}
                 </div>
@@ -142,9 +156,33 @@ export function UserDetailModal({ username, days = 30, granularity = 'day', onCl
                       </tr>
                     </thead>
                     <tbody>
-                      {detail.recent_sessions.map((s, i) => (
-                        <tr key={i}>
-                          <td><code>{s.resource_type}</code></td>
+                      {detail.recent_sessions.map((s, i) => {
+                        const showResourceCode = Boolean(s.resource_display && s.resource_display !== s.resource_type);
+                        const acceleratorLabel = formatAcceleratorLabel(s.accelerator_type, s.accelerator_display);
+                        const showAcceleratorCode =
+                          Boolean(s.accelerator_display && s.accelerator_type && s.accelerator_display !== s.accelerator_type);
+                        return (
+                          <tr key={i}>
+                          <td>
+                            <div>
+                              <span>{s.resource_display ?? s.resource_type}</span>
+                              {showResourceCode && (
+                                <span className="text-body-secondary tw:ms-2 tw:text-xs">
+                                  <code>{s.resource_type}</code>
+                                </span>
+                              )}
+                            </div>
+                            {acceleratorLabel && (
+                              <div className="text-body-secondary tw:text-xs tw:mt-1">
+                                {acceleratorLabel}
+                                {showAcceleratorCode && (
+                                  <span className="tw:ms-2">
+                                    <code>{s.accelerator_type}</code>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="text-body-secondary tw:text-xs">
                             {s.start_time.slice(0, 16).replace('T', ' ')}
                           </td>
@@ -154,8 +192,9 @@ export function UserDetailModal({ username, days = 30, granularity = 'day', onCl
                               {s.status}
                             </span>
                           </td>
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

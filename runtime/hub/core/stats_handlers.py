@@ -3,12 +3,68 @@
 
 import json
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 from jupyterhub.apihandlers import APIHandler
 from tornado import web
 
+from core.config import HubConfig
 from core.database import session_scope
 from core.quota.orm import UsageSession
+
+
+@lru_cache(maxsize=1)
+def _resource_label_data() -> tuple[dict[str, str], dict[str, str], dict[str, set[str]]]:
+    """Return cached mappings for resource and accelerator labels."""
+    config = HubConfig.get()
+    resource_labels: dict[str, str] = {}
+    accelerator_labels: dict[str, str] = {}
+    accelerator_to_resources: dict[str, set[str]] = {}
+
+    for key, meta in config.resources.metadata.items():
+        label = meta.description or key
+        resource_labels[key] = label
+
+        accel_keys = set(meta.acceleratorKeys or [])
+        if meta.accelerator:
+            accel_keys.add(meta.accelerator)
+        for acc_key in accel_keys:
+            accelerator_to_resources.setdefault(acc_key, set()).add(key)
+
+    for key, accel in config.accelerators.items():
+        accelerator_labels[key] = accel.displayName or key
+
+    # Always ensure CPU fallback label
+    accelerator_labels.setdefault("cpu", "CPU")
+
+    return (resource_labels, accelerator_labels, accelerator_to_resources)
+
+
+def _resource_display(resource_type: str) -> str:
+    """Resolve a human-friendly label for a given resource or accelerator key."""
+    resource_labels, accelerator_labels, accelerator_to_resources = _resource_label_data()
+
+    if resource_type in resource_labels:
+        return resource_labels[resource_type]
+
+    candidate_resources = accelerator_to_resources.get(resource_type, set())
+    if len(candidate_resources) == 1:
+        candidate = next(iter(candidate_resources))
+        return resource_labels.get(candidate, candidate)
+
+    if resource_type in accelerator_labels:
+        return accelerator_labels[resource_type]
+
+    return resource_type
+
+
+def _accelerator_display(accelerator_key: str | None) -> str | None:
+    """Return a human-friendly accelerator label if available."""
+    if not accelerator_key:
+        return None
+
+    _, accelerator_labels, _ = _resource_label_data()
+    return accelerator_labels.get(accelerator_key, accelerator_key)
 
 
 def _require_admin(handler):
@@ -43,9 +99,7 @@ class StatsOverviewHandler(APIHandler):
         users_this_week = self.db.query(User).filter(User.last_activity >= week_ago).count()
 
         with session_scope() as session:
-            active_sessions = (
-                session.query(UsageSession).filter(UsageSession.status == "active").count()
-            )
+            active_sessions = session.query(UsageSession).filter(UsageSession.status == "active").count()
             total_minutes_row = session.execute(
                 __import__("sqlalchemy").text(
                     "SELECT COALESCE(SUM(duration_minutes), 0) FROM quota_usage_sessions "
@@ -125,7 +179,7 @@ class StatsUsageHandler(APIHandler):
                 d += timedelta(days=1)
         else:
             # Iterate week by week from the Monday of the starting week
-            from datetime import date as date_type
+
             d = since.date()
             d -= timedelta(days=d.weekday())  # rewind to Monday
             today = now.date()
@@ -199,6 +253,7 @@ class StatsDistributionHandler(APIHandler):
             "by_resource": [
                 {
                     "resource_type": row[0],
+                    "resource_display": _resource_display(row[0]),
                     "minutes": int(row[1]),
                     "sessions": int(row[2]),
                     "users": int(row[3]),
@@ -287,7 +342,7 @@ class StatsUserHandler(APIHandler):
             # Recent sessions (last 20)
             session_rows = session.execute(
                 sa.text(
-                    "SELECT resource_type, start_time, end_time, duration_minutes, status "
+                    "SELECT resource_type, accelerator_type, start_time, end_time, duration_minutes, status "
                     "FROM quota_usage_sessions "
                     "WHERE username = :username "
                     "AND start_time >= :since "
@@ -313,21 +368,26 @@ class StatsUserHandler(APIHandler):
             "username": username,
             "total_minutes": int(totals_row[0] or 0),
             "total_sessions": int(totals_row[1] or 0),
-            "usage": [
-                {"date": str(r[0]), "minutes": int(r[1]), "sessions": int(r[2])}
-                for r in usage_rows
-            ],
+            "usage": [{"date": str(r[0]), "minutes": int(r[1]), "sessions": int(r[2])} for r in usage_rows],
             "by_resource": [
-                {"resource_type": r[0], "minutes": int(r[1]), "sessions": int(r[2])}
+                {
+                    "resource_type": r[0],
+                    "resource_display": _resource_display(r[0]),
+                    "minutes": int(r[1]),
+                    "sessions": int(r[2]),
+                }
                 for r in resource_rows
             ],
             "recent_sessions": [
                 {
                     "resource_type": r[0],
-                    "start_time": str(r[1]),
-                    "end_time": str(r[2]) if r[2] else None,
-                    "duration_minutes": int(r[3]) if r[3] is not None else None,
-                    "status": r[4],
+                    "resource_display": _resource_display(r[0]),
+                    "accelerator_type": r[1],
+                    "accelerator_display": _accelerator_display(r[1]),
+                    "start_time": str(r[2]),
+                    "end_time": str(r[3]) if r[3] else None,
+                    "duration_minutes": int(r[4]) if r[4] is not None else None,
+                    "status": r[5],
                 }
                 for r in session_rows
             ],
@@ -386,7 +446,11 @@ class StatsHourlyHandler(APIHandler):
         by_hour = {int(r[0]): {"sessions": int(r[1]), "minutes": int(r[2])} for r in rows}
         return {
             "hourly": [
-                {"hour": h, "sessions": by_hour.get(h, {}).get("sessions", 0), "minutes": by_hour.get(h, {}).get("minutes", 0)}
+                {
+                    "hour": h,
+                    "sessions": by_hour.get(h, {}).get("sessions", 0),
+                    "minutes": by_hour.get(h, {}).get("minutes", 0),
+                }
                 for h in range(24)
             ]
         }
@@ -403,7 +467,7 @@ def _active_sessions_data() -> dict:
     with session_scope() as session:
         active_rows = session.execute(
             sa.text(
-                "SELECT q.username, q.resource_type, q.start_time "
+                "SELECT q.username, q.resource_type, q.accelerator_type, q.start_time "
                 "FROM quota_usage_sessions q "
                 "JOIN spawners s ON s.server_id IS NOT NULL "
                 "JOIN users u ON u.id = s.user_id AND LOWER(u.name) = LOWER(q.username) "
@@ -429,13 +493,13 @@ def _active_sessions_data() -> dict:
             {
                 "username": r[0],
                 "resource_type": r[1],
-                "start_time": str(r[2]),
-                "elapsed_minutes": int(
-                    (now - datetime.fromisoformat(str(r[2]))).total_seconds() / 60
-                ),
-                "idle_warning": int(
-                    (now - datetime.fromisoformat(str(r[2]))).total_seconds() / 60
-                ) >= IDLE_WARN_MINUTES,
+                "resource_display": _resource_display(r[1]),
+                "accelerator_type": r[2],
+                "accelerator_display": _accelerator_display(r[2]),
+                "start_time": str(r[3]),
+                "elapsed_minutes": int((now - datetime.fromisoformat(str(r[3]))).total_seconds() / 60),
+                "idle_warning": int((now - datetime.fromisoformat(str(r[3]))).total_seconds() / 60)
+                >= IDLE_WARN_MINUTES,
             }
             for r in active_rows
         ],
@@ -443,9 +507,7 @@ def _active_sessions_data() -> dict:
             {
                 "username": r[0],
                 "started": str(r[1]),
-                "waiting_minutes": int(
-                    (now - datetime.fromisoformat(str(r[1]))).total_seconds() / 60
-                ),
+                "waiting_minutes": int((now - datetime.fromisoformat(str(r[1]))).total_seconds() / 60),
             }
             for r in pending_rows
         ],

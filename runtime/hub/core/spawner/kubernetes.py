@@ -706,7 +706,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
         quota_manager = get_quota_manager()
 
         # Always start a usage session for tracking, regardless of quota state
-        self.usage_session_id = quota_manager.start_usage_session(username, accelerator_type)
+        self.usage_session_id = quota_manager.start_usage_session(username, resource_type, accelerator_type)
 
         # Quota check (if enabled)
         if self.quota_enabled:
@@ -928,7 +928,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 active = quota_manager.get_active_session(username)
                 if active:
                     duration, quota_used = quota_manager.end_usage_session(active["session_id"], quota_rates)
-                    print(f"[USAGE] Recovered session for {username}. Duration: {duration} min, Quota used: {quota_used}")
+                    print(
+                        f"[USAGE] Recovered session for {username}. Duration: {duration} min, Quota used: {quota_used}"
+                    )
         except Exception as e:
             print(f"[USAGE] Error ending session for {username}: {e}")
 
