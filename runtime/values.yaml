@@ -322,8 +322,32 @@ custom:
     # Auto-refresh rules: each rule generates a K8s CronJob
     refreshRules: {}
 
+monitoring:
+  namespace: monitoring
+  releaseLabel: monitoring
+
+  servicemonitor:
+    enabled: false
+    interval: 15s
+
+  grafana:
+    dashboard:
+      enabled: false
+
+  prometheusRule:
+    enabled: false
+
 # Use K3s built-in local-path storage (no NFS required)
 hub:
+  # Hub metrics exposure and Prometheus integration
+  metrics:
+    enabled: false
+
+  # Allow Prometheus to scrape /hub/metrics when metrics.enabled=true
+  # This disables the JupyterHub read:metrics scope requirement so in-cluster
+  # Prometheus can access metrics without a token.
+  authenticatePrometheus: false
+
   db:
     pvc:
       storageClassName: local-path

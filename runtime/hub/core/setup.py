@@ -39,6 +39,7 @@ Usage in jupyterhub_config.py:
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import TYPE_CHECKING, Any
 
@@ -70,6 +71,7 @@ def setup_hub(c: Any) -> None:
     from core.config import HubConfig
     from core.database import create_all_tables, init_database
     from core.handlers import configure_handlers, get_handlers
+    from core.metrics_updater import start_metrics_updater
     from core.spawner import RemoteLabKubeSpawner
 
     # Get the initialized config singleton
@@ -83,6 +85,16 @@ def setup_hub(c: Any) -> None:
     RemoteLabKubeSpawner.configure_from_config(config)
 
     c.JupyterHub.spawner_class = RemoteLabKubeSpawner
+
+    # Start background metrics updater after hub event loop is ready
+    import asyncio
+
+    def _start_metrics_updater():
+        with contextlib.suppress(Exception):
+            start_metrics_updater()
+
+    loop = asyncio.get_event_loop()
+    loop.call_later(5, _start_metrics_updater)
 
     # =========================================================================
     # Pre-create System Groups

@@ -137,6 +137,12 @@ for trait, cfg_key in (
     else:
         z2jh.set_config_if_not_none(c.JupyterHub, trait, "hub." + cfg_key)
 
+# Optional Prometheus metrics access
+metrics_enabled = z2jh.get_config("hub.metrics.enabled", False)
+
+if metrics_enabled:
+    c.JupyterHub.authenticate_prometheus = False
+
 # Hub bind and connect URLs
 hub_container_port = 8081
 c.JupyterHub.hub_bind_url = f"http://:{hub_container_port}"

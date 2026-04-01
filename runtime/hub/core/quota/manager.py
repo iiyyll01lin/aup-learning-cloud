@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import re
 import threading
+from contextlib import suppress
 from datetime import datetime, timedelta
 
 from sqlalchemy import inspect, text
 
 from core.database import get_engine, get_session, session_scope
+from core.metrics import quota_deducted_total, quota_denied_total
 from core.quota.orm import QuotaTransaction, UsageSession, UserQuota
 
 # Re-export models for backwards compatibility
@@ -148,9 +150,13 @@ class QuotaManager:
         estimated_cost = runtime_minutes * rate
 
         if balance <= 0:
+            with suppress(Exception):
+                quota_denied_total.labels(reason="zero_balance").inc()
             return (False, f"Insufficient quota (balance: {balance})", estimated_cost)
 
         if balance < estimated_cost:
+            with suppress(Exception):
+                quota_denied_total.labels(reason="insufficient_balance").inc()
             max_runtime = balance // rate if rate > 0 else 0
             return (
                 False,
@@ -381,6 +387,9 @@ class QuotaManager:
                 usage_session.quota_consumed = quota_consumed
 
                 if quota_consumed > 0:
+                    with suppress(Exception):
+                        quota_deducted_total.inc()
+
                     user = session.query(UserQuota).filter(UserQuota.username == usage_session.username).first()
                     if user and not user.unlimited:
                         balance_before = user.balance

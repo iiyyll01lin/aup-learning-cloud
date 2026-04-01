@@ -1,0 +1,14 @@
+{{- if and .Values.hub.metrics.enabled .Values.monitoring.grafana.dashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-aup-hub
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  aup-hub-operations.json: |
+{{ .Files.Get "dashboards/grafana-dashboard-aup-hub-ops.json" | indent 4 }}
+  aup-hub-notebook-resources.json: |
+{{ .Files.Get "dashboards/grafana-dashboard-aup-hub-resources.json" | indent 4 }}
+{{- end }}
