@@ -368,8 +368,6 @@
   .spawn-sidebar {
     position: static;
   }
-  /* On mobile, show inline GPU/Git panels instead of sidebar */
-  .spawn-picker .gpu-selection { display: block; }
 }
 @media (max-width: 600px) {
   #spawn-root { padding: 1rem; }
