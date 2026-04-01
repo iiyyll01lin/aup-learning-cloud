@@ -1,0 +1,32 @@
+{
+  "title": "AUP Hub Resources",
+  "tags": ["aup-learning-hub", "resources"],
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Notebook CPU by Pod (mCPU)",
+      "targets": [{ "expr": "1000 * sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"jupyterhub\", pod=~\"jupyter-.*\", cpu=\"total\"}[5m]))", "refId": "A" }],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Notebook Memory by Pod (MiB)",
+      "targets": [{ "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"jupyterhub\", pod=~\"jupyter-.*\"}) / 1024 / 1024", "refId": "A" }],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Notebook CPU Total (mCPU)",
+      "targets": [{ "expr": "1000 * sum(rate(container_cpu_usage_seconds_total{namespace=\"jupyterhub\", pod=~\"jupyter-.*\", cpu=\"total\"}[5m]))", "refId": "A" }],
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "type": "stat",
+      "title": "Notebook Memory Total (MiB)",
+      "targets": [{ "expr": "sum(container_memory_working_set_bytes{namespace=\"jupyterhub\", pod=~\"jupyter-.*\"}) / 1024 / 1024", "refId": "A" }],
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 8 }
+    }
+  ]
+}

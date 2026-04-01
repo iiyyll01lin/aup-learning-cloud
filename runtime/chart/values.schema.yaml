@@ -191,45 +191,6 @@ properties:
       `{"name": "my-secret-name"}`, or you can let list elements be strings
       naming the secrets directly.
 
-  monitoring:
-    type: object
-    additionalProperties: false
-    properties:
-      namespace:
-        type: string
-        default: monitoring
-      releaseLabel:
-        type: string
-        default: monitoring
-      servicemonitor:
-        type: object
-        additionalProperties: false
-        properties:
-          enabled:
-            type: boolean
-            default: false
-          interval:
-            type: string
-            default: 15s
-      grafana:
-        type: object
-        additionalProperties: false
-        properties:
-          dashboard:
-            type: object
-            additionalProperties: false
-            properties:
-              enabled:
-                type: boolean
-                default: false
-      prometheusRule:
-        type: object
-        additionalProperties: false
-        properties:
-          enabled:
-            type: boolean
-            default: false
-
   hub:
     type: object
     additionalProperties: false
@@ -1331,6 +1292,9 @@ properties:
         patternProperties: *labels-and-annotations-patternProperties
         description: |
           K8s annotations for the hub pod.
+      authenticatePrometheus:
+        type: [boolean, "null"]
+        description: *jupyterhub-native-config-description
       concurrentSpawnLimit:
         type: [integer, "null"]
         description: *jupyterhub-native-config-description
@@ -2145,6 +2109,45 @@ properties:
           containerSecurityContext: *containerSecurityContext-spec
           image: *image-spec
           resources: *resources-spec
+
+  monitoring:
+    type: object
+    additionalProperties: false
+    properties:
+      namespace:
+        type: string
+        default: monitoring
+      releaseLabel:
+        type: string
+        default: monitoring
+      servicemonitor:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          interval:
+            type: string
+            default: 15s
+      grafana:
+        type: object
+        additionalProperties: false
+        properties:
+          dashboard:
+            type: object
+            additionalProperties: false
+            properties:
+              enabled:
+                type: boolean
+                default: false
+      prometheusRule:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
 
   singleuser:
     type: object

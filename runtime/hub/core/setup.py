@@ -39,8 +39,8 @@ Usage in jupyterhub_config.py:
 
 from __future__ import annotations
 
-import contextlib
 import os
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 import bcrypt
@@ -90,7 +90,7 @@ def setup_hub(c: Any) -> None:
     import asyncio
 
     def _start_metrics_updater():
-        with contextlib.suppress(Exception):
+        with suppress(Exception):
             start_metrics_updater()
 
     loop = asyncio.get_event_loop()

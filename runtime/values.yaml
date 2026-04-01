@@ -322,24 +322,8 @@ custom:
     # Auto-refresh rules: each rule generates a K8s CronJob
     refreshRules: {}
 
-monitoring:
-  namespace: monitoring
-  releaseLabel: monitoring
-
-  servicemonitor:
-    enabled: false
-    interval: 15s
-
-  grafana:
-    dashboard:
-      enabled: false
-
-  prometheusRule:
-    enabled: false
-
 # Use K3s built-in local-path storage (no NFS required)
 hub:
-  # Hub metrics exposure and Prometheus integration
   metrics:
     enabled: false
 
@@ -402,6 +386,21 @@ hub:
     # ---- KubeSpawner Prepuller Setup ----
     KubeSpawner:
       image_pull_policy: IfNotPresent
+
+monitoring:
+  namespace: monitoring
+  releaseLabel: monitoring
+
+  servicemonitor:
+    enabled: false
+    interval: 15s
+
+  grafana:
+    dashboard:
+      enabled: false
+
+  prometheusRule:
+    enabled: false
 
 singleuser:
   storage:
