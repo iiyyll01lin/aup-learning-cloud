@@ -2,93 +2,647 @@
 {% if announcement_home is string %}
   {% set announcement = announcement_home %}
 {% endif %}
+
+{%- block title -%}Home - AUP Learning Cloud{%- endblock title -%}
+
+{% block stylesheet %}
+{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ================================================================
+     AUP Learning Cloud – Home Page
+     ================================================================ */
+  :root {
+    --amd-accent: #ed1c24;
+    --amd-green: #00a86b;
+    --home-surface-0: #ffffff;
+    --home-surface-1: #f8f9fa;
+    --home-surface-2: #e9ecef;
+    --home-text: #212529;
+    --home-text-secondary: #6c757d;
+    --home-text-muted: #adb5bd;
+    --home-border: #dee2e6;
+    --home-radius: 12px;
+    --home-radius-sm: 8px;
+    --home-hover-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+  }
+  [data-bs-theme="dark"] {
+    --home-surface-0: #1e2127;
+    --home-surface-1: #16181d;
+    --home-surface-2: #2a2d35;
+    --home-text: #e9ecef;
+    --home-text-secondary: #9ca3af;
+    --home-text-muted: #6b7280;
+    --home-border: #2d3039;
+  }
+
+  .home-page {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  /* Hero */
+  .home-hero {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 2.75rem 0 3.5rem;
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+  }
+  [data-bs-theme="dark"] .home-hero { background: #0d0d0d; }
+  .home-hero::before {
+    content: '';
+    position: absolute;
+    top: -60%; right: -5%;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(237,28,36,0.12) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .home-hero h1 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 2.3rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.03em;
+    position: relative;
+    z-index: 1;
+  }
+  .home-hero h1 .accent { color: var(--amd-accent); }
+  .home-hero .hero-desc {
+    font-size: 1rem;
+    color: rgba(255,255,255,0.6);
+    max-width: 560px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Launch bar */
+  .launch-bar {
+    background: var(--home-surface-0);
+    border: 1px solid var(--home-border);
+    border-radius: var(--home-radius);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-top: -2rem;
+    position: relative;
+    z-index: 10;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  [data-bs-theme="dark"] .launch-bar {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .lb-icon {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+    color: #fff;
+  }
+  .lb-icon.stopped { background: var(--amd-accent); }
+  .lb-icon.running { background: var(--amd-green); }
+  .lb-info { flex: 1; }
+  .lb-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--home-text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .lb-desc {
+    font-size: 0.82rem;
+    color: var(--home-text-secondary);
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .status-badge.stopped {
+    background: var(--home-surface-2);
+    color: var(--home-text-secondary);
+  }
+  .status-badge.running {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+  [data-bs-theme="dark"] .status-badge.running {
+    background: #1b3a26;
+    color: #66bb6a;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-dot.stopped { background: #adb5bd; }
+  .status-dot.running {
+    background: var(--amd-green);
+    box-shadow: 0 0 6px rgba(0,168,107,0.5);
+  }
+  .lb-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  /* Buttons */
+  .btn-launch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--amd-accent);
+    color: #fff;
+    border: none;
+    padding: 0.65rem 1.75rem;
+    border-radius: var(--home-radius-sm);
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+    text-decoration: none;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .btn-launch:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(237,28,36,0.35);
+    color: #fff;
+    text-decoration: none;
+  }
+  .btn-home-sm {
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid var(--home-border);
+    background: var(--home-surface-0);
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--home-text);
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .btn-home-sm:hover { background: var(--home-surface-1); }
+  .btn-home-sm.danger {
+    background: #dc3545;
+    color: #fff;
+    border-color: #dc3545;
+  }
+  .btn-home-sm.danger:hover { background: #c82333; }
+
+  /* Sections */
+  .home-section {
+    padding: 2rem 0;
+  }
+  .home-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1.25rem;
+  }
+  .home-section-header h2 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--home-text);
+  }
+  .home-section-header a {
+    font-size: 0.82rem;
+    color: var(--amd-accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .home-section-header a:hover { text-decoration: underline; }
+
+  /* Quick Start */
+  .qs-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .qs-card {
+    background: var(--home-surface-0);
+    border: 1px solid var(--home-border);
+    border-radius: var(--home-radius);
+    padding: 1.25rem;
+    transition: box-shadow 0.2s, transform 0.15s;
+  }
+  .qs-card:hover {
+    box-shadow: var(--home-hover-shadow);
+    transform: translateY(-2px);
+  }
+  .qs-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 0.65rem;
+  }
+  [data-bs-theme="dark"] .qs-num { background: #e9ecef; color: #1a1a1a; }
+  .qs-card h3 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: var(--home-text);
+  }
+  .qs-card p {
+    font-size: 0.82rem;
+    color: var(--home-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* Courses */
+  .courses-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  .course-card {
+    background: var(--home-surface-0);
+    border: 1px solid var(--home-border);
+    border-radius: var(--home-radius);
+    padding: 1.15rem;
+    transition: box-shadow 0.2s, transform 0.15s;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--home-text);
+    display: block;
+  }
+  .course-card:hover {
+    box-shadow: var(--home-hover-shadow);
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: var(--home-text);
+  }
+  .course-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 0.65rem;
+  }
+  .course-card h3 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+  }
+  .course-card p {
+    font-size: 0.78rem;
+    color: var(--home-text-secondary);
+    line-height: 1.45;
+    margin: 0;
+  }
+  .course-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.12rem 0.45rem;
+    border-radius: 4px;
+    margin-top: 0.45rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .icon-cv { background: #e3f2fd; color: #1565c0; }
+  .icon-dl { background: #fce4ec; color: #c62828; }
+  .icon-llm { background: #f3e5f5; color: #6a1b9a; }
+  .icon-phy { background: #e8f5e9; color: #2e7d32; }
+  .tag-gpu { background: #fce4ec; color: #c62828; }
+  .tag-cpu { background: #e3f2fd; color: #1565c0; }
+
+  /* Two-column layout */
+  .home-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Doc list */
+  .doc-list {
+    background: var(--home-surface-0);
+    border: 1px solid var(--home-border);
+    border-radius: var(--home-radius);
+    overflow: hidden;
+  }
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.7rem 1.1rem;
+    border-bottom: 1px solid var(--home-surface-2);
+    text-decoration: none;
+    color: var(--home-text);
+    transition: background 0.15s;
+  }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-item:hover {
+    background: var(--home-surface-1);
+    text-decoration: none;
+    color: var(--home-text);
+  }
+  .doc-icon {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+  .doc-text h4 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--home-text);
+  }
+  .doc-text p {
+    font-size: 0.75rem;
+    color: var(--home-text-secondary);
+    margin: 0;
+  }
+
+  /* News */
+  .news-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .news-card {
+    background: var(--home-surface-0);
+    border: 1px solid var(--home-border);
+    border-radius: var(--home-radius);
+    padding: 1rem 1.15rem;
+    transition: box-shadow 0.2s;
+  }
+  .news-card:hover { box-shadow: var(--home-hover-shadow); }
+  .news-meta {
+    font-size: 0.7rem;
+    color: var(--home-text-muted);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .news-card h4 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    color: var(--home-text);
+  }
+  .news-card p {
+    font-size: 0.78rem;
+    color: var(--home-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* Footer */
+  .home-footer {
+    border-top: 1px solid var(--home-border);
+    padding: 1.25rem 0;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--home-text-muted);
+    margin-top: 0.5rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .home-hero h1 { font-size: 1.8rem; }
+    .qs-grid { grid-template-columns: 1fr; }
+    .courses-grid { grid-template-columns: repeat(2, 1fr); }
+    .home-two-col { grid-template-columns: 1fr; }
+    .launch-bar { flex-direction: column; text-align: center; }
+    .lb-actions { justify-content: center; }
+  }
+</style>
+{% endblock stylesheet %}
+
 {% block main %}
+<div class="home-page">
+
+  <!-- Hero -->
+  <section class="home-hero">
+    <div class="container">
+      <h1>Welcome to <span class="accent">AUP Learning Cloud</span></h1>
+      <p class="hero-desc">Experience next-generation AI acceleration with AMD ROCm. Launch GPU-powered Jupyter notebooks for deep learning, computer vision, LLMs, and more.</p>
+    </div>
+  </section>
+
+  <!-- Launch Bar -->
   <div class="container">
-    <h1 class="sr-only">JupyterHub home page</h1>
-    <div class="row">
-      <div class="text-center">
-        {% if default_server.active %}<a id="stop" role="button" class="btn btn-lg btn-danger">Stop My Server</a>{% endif %}
-        <a id="start"
-           role="button"
-           class="btn btn-lg btn-primary"
-           href="{{ url }}">
-          {% if not default_server.active %}Start{% endif %}
+    <div class="launch-bar">
+      <div class="lb-icon {% if default_server.active %}running{% else %}stopped{% endif %}">
+        <i class="fa fa-server"></i>
+      </div>
+      <div class="lb-info">
+        <div class="lb-title">
           My Server
-        </a>
+          {% if default_server.active %}
+            <span class="status-badge running"><span class="status-dot running"></span> Running</span>
+          {% else %}
+            <span class="status-badge stopped"><span class="status-dot stopped"></span> Stopped</span>
+          {% endif %}
+        </div>
+        <div class="lb-desc">
+          {% if default_server.active %}
+            Your server is running &mdash; click &ldquo;My Server&rdquo; to open JupyterLab
+          {% else %}
+            Choose a course and launch your Jupyter environment
+          {% endif %}
+        </div>
+      </div>
+      <div class="lb-actions">
+        {% if default_server.active %}
+          <a id="stop" role="button" class="btn-home-sm danger">
+            <i class="fa fa-stop"></i> Stop My Server
+          </a>
+          <a id="start" role="button" class="btn-launch" href="{{ url }}">
+            <i class="fa fa-external-link"></i> My Server
+          </a>
+        {% else %}
+          <a id="start" role="button" class="btn-launch" href="{{ url }}">
+            <i class="fa fa-play"></i> Start My Server
+          </a>
+        {% endif %}
       </div>
     </div>
-    {% if allow_named_servers %}
-      <h2>Named Servers</h2>
-      <p>
-        In addition to your default server,
-        you may have additional
-        {% if named_server_limit_per_user > 0 %}{{ named_server_limit_per_user }}{% endif %}
-        server(s) with names.
-        This allows you to have more than one server running at the same time.
-      </p>
-      {% set named_spawners = user.all_spawners(include_default=False)|list %}
-      <table class="server-table table table-striped">
-        <thead>
-          <tr>
-            <th>Server name</th>
-            <th>URL</th>
-            <th>Last activity</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="home-server-row add-server-row">
-            <td colspan="4">
-              <div class="input-group">
-                <input class="new-server-name form-control"
-                       aria-label="server name"
-                       placeholder="name-your-server">
-                <button role="button"
-                        type="button"
-                        class="new-server-btn btn btn-xs btn-primary">Add New Server</button>
-              </div>
-            </td>
-          </tr>
-          {% for spawner in named_spawners %}
-            <tr class="home-server-row" data-server-name="{{ spawner.name }}">
-              {# name #}
-              <td>{{ spawner.name }}</td>
-              {# url #}
-              <td>
-                <a class="server-link {% if not spawner.ready %}hidden{% endif %}"
-                   href="{{ user.server_url(spawner.name) }}">{{ user.server_url(spawner.name) }}</a>
-              </td>
-              {# activity #}
-              <td class='time-col'>
-                {% if spawner.last_activity %}
-                  {{ spawner.last_activity.isoformat() + 'Z' }}
-                {% else %}
-                  Never
-                {% endif %}
-              </td>
-              {# actions #}
-              <td>
-                <a role="button"
-                   class="stop-server btn btn-xs btn-danger{% if not spawner.active %} hidden{% endif %}"
-                   id="stop-{{ spawner.name }}">stop</a>
-                <a role="button"
-                   class="start-server btn btn-xs btn-primary {% if spawner.active %}hidden{% endif %}"
-                   id="start-{{ spawner.name }}"
-                   href="{{ base_url }}spawn/{{ user.name }}/{{ spawner.name }}">start</a>
-                <button role="button"
-                        class="delete-server btn btn-xs btn-danger{% if spawner.active %} hidden{% endif %}"
-                        id="delete-{{ spawner.name }}">delete</button>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endif %}
   </div>
+
+  <!-- Quick Start -->
+  <div class="container">
+    <section class="home-section">
+      <div class="home-section-header"><h2>Quick Start</h2></div>
+      <div class="qs-grid">
+        <div class="qs-card">
+          <div class="qs-num">1</div>
+          <h3>Choose a Course</h3>
+          <p>Select from pre-configured environments for CV, Deep Learning, LLMs, or Physics Simulation.</p>
+        </div>
+        <div class="qs-card">
+          <div class="qs-num">2</div>
+          <h3>Launch Your Server</h3>
+          <p>Click &ldquo;Start My Server&rdquo; to spin up a Jupyter environment with GPU/NPU acceleration.</p>
+        </div>
+        <div class="qs-card">
+          <div class="qs-num">3</div>
+          <h3>Start Learning</h3>
+          <p>Open notebooks, run experiments, and explore AMD ROCm-powered AI workflows.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Available Courses -->
+  <div class="container">
+    <section class="home-section" style="padding-top:0">
+      <div class="home-section-header">
+        <h2>Available Courses</h2>
+        <a href="{{ base_url }}spawn">View all in Spawner <i class="fa fa-arrow-right" style="font-size:0.7rem"></i></a>
+      </div>
+      <div class="courses-grid">
+        <a class="course-card" href="{{ base_url }}spawn">
+          <div class="course-icon icon-cv">CV</div>
+          <h3>Computer Vision</h3>
+          <p>Image classification, object detection &amp; segmentation with AMD GPUs.</p>
+          <span class="course-tag tag-gpu">GPU</span>
+        </a>
+        <a class="course-card" href="{{ base_url }}spawn">
+          <div class="course-icon icon-dl">DL</div>
+          <h3>Deep Learning</h3>
+          <p>Neural networks, training pipelines &amp; optimization on ROCm.</p>
+          <span class="course-tag tag-gpu">GPU</span>
+        </a>
+        <a class="course-card" href="{{ base_url }}spawn">
+          <div class="course-icon icon-llm">LLM</div>
+          <h3>Large Language Models</h3>
+          <p>Transformer fine-tuning &amp; inference with AMD Instinct accelerators.</p>
+          <span class="course-tag tag-gpu">GPU</span>
+        </a>
+        <a class="course-card" href="{{ base_url }}spawn">
+          <div class="course-icon icon-phy">PS</div>
+          <h3>Physics Simulation</h3>
+          <p>Scientific computing &amp; physics-based simulations.</p>
+          <span class="course-tag tag-cpu">CPU</span>
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <!-- Docs + News -->
+  <div class="container">
+    <section class="home-section" style="padding-top:0">
+      <div class="home-two-col">
+        <div>
+          <div class="home-section-header"><h2>Documentation</h2></div>
+          <div class="doc-list">
+            <a class="doc-item" href="https://rocm.docs.amd.com/" target="_blank" rel="noopener">
+              <div class="doc-icon" style="background:#fce4ec;color:#c62828;"><i class="fa fa-book"></i></div>
+              <div class="doc-text">
+                <h4>AMD ROCm Documentation</h4>
+                <p>Official ROCm platform docs &amp; API references</p>
+              </div>
+            </a>
+            <a class="doc-item" href="https://jupyterlab.readthedocs.io/" target="_blank" rel="noopener">
+              <div class="doc-icon" style="background:#e3f2fd;color:#1565c0;"><i class="fa fa-laptop"></i></div>
+              <div class="doc-text">
+                <h4>JupyterLab User Guide</h4>
+                <p>Notebooks, terminals &amp; extensions</p>
+              </div>
+            </a>
+            <a class="doc-item" href="https://rocm.docs.amd.com/en/latest/how-to/rocm-install-on-linux.html" target="_blank" rel="noopener">
+              <div class="doc-icon" style="background:#f3e5f5;color:#6a1b9a;"><i class="fa fa-rocket"></i></div>
+              <div class="doc-text">
+                <h4>Platform Getting Started</h4>
+                <p>First-time user guide for ROCm setup</p>
+              </div>
+            </a>
+            <a class="doc-item" href="{{ base_url }}spawn">
+              <div class="doc-icon" style="background:#e8f5e9;color:#2e7d32;"><i class="fa fa-code-fork"></i></div>
+              <div class="doc-text">
+                <h4>Custom Git Repository</h4>
+                <p>Clone &amp; launch your own repos</p>
+              </div>
+            </a>
+          </div>
+        </div>
+        <div>
+          <div class="home-section-header"><h2>News &amp; Updates</h2></div>
+          <div class="news-list" id="news-list">
+            <div class="news-card">
+              <div class="news-meta">Platform</div>
+              <h4>Welcome to AUP Learning Cloud</h4>
+              <p>Get started with GPU-accelerated Jupyter notebooks powered by AMD ROCm technology.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <div class="home-footer">
+    <div class="container">
+      &copy; 2025 Advanced Micro Devices, Inc. All rights reserved. &middot; AUP Learning Cloud
+    </div>
+  </div>
+
+</div>
 {% endblock main %}
+
 {% block script %}
-  {{ super() }}
-  <script type="text/javascript">
-    require(["home"]);
-  </script>
+{{ super() }}
+<script type="text/javascript">
+  require(["home"]);
+</script>
+<script type="text/javascript">
+  // Load announcement from static file (same mechanism as login page)
+  fetch('{{ base_url }}static/announcement.txt')
+    .then(function(resp) {
+      if (!resp.ok) throw new Error('Not found');
+      return resp.text();
+    })
+    .then(function(data) {
+      if (data && data.trim()) {
+        var newsEl = document.getElementById('news-list');
+        if (newsEl) {
+          var card = document.createElement('div');
+          card.className = 'news-card';
+          card.innerHTML = '<div class="news-meta">Announcement</div>' +
+            '<h4>Platform Announcement</h4>' +
+            '<p>' + data.trim() + '</p>';
+          newsEl.prepend(card);
+        }
+      }
+    })
+    .catch(function() {});
+</script>
 {% endblock script %}

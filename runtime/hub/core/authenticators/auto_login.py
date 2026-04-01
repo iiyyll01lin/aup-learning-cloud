@@ -45,7 +45,7 @@ class AutoLoginAuthenticator(Authenticator):
         """Override to bypass login page and auto-authenticate."""
 
         class AutoLoginHandler(BaseHandler):
-            """Handler that automatically authenticates and redirects to spawn."""
+            """Handler that automatically authenticates and redirects to home."""
 
             async def get(self):
                 """Auto-authenticate user on GET request."""
@@ -59,7 +59,7 @@ class AutoLoginAuthenticator(Authenticator):
 
                 next_url = self.get_argument("next", "")
                 if not next_url:
-                    next_url = getattr(user, "url", None) or url_path_join(self.hub.base_url, "spawn")
+                    next_url = url_path_join(self.hub.base_url, "home")
 
                 self.log.info(f"Auto-login: user '{username}' authenticated, redirecting to {next_url}")
                 self.redirect(next_url)
