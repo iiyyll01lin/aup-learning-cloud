@@ -22,7 +22,7 @@ const jhdata = window.jhdata ?? {
 
 const homeData: HomeData = window.HOME_DATA ?? {
   server_active: false,
-  server_url: `${jhdata.base_url}spawn`,
+  server_url: `${jhdata.base_url.replace(/\/?$/, "/")}user/${jhdata.user}/`,
 };
 
 const baseUrl = jhdata.base_url;
