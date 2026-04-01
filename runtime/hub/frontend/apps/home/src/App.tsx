@@ -20,12 +20,12 @@ const jhdata = window.jhdata ?? {
   user: "student",
 };
 
+const baseUrl = jhdata.base_url ?? "/hub/";
+
 const homeData: HomeData = window.HOME_DATA ?? {
   server_active: false,
-  server_url: `${jhdata.base_url.replace(/\/?$/, "/")}user/${jhdata.user}/`,
+  server_url: `${baseUrl.replace(/\/?$/, "/")}user/${jhdata.user ?? "student"}/`,
 };
-
-const baseUrl = jhdata.base_url;
 
 function formatResourceSpecs(r: Resource): string {
   const req = r.requirements;
