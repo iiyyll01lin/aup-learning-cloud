@@ -52,6 +52,7 @@ from core.stats_handlers import (
     StatsActiveSSEHandler,
     StatsDistributionHandler,
     StatsHourlyHandler,
+    StatsMyUsageHandler,
     StatsOverviewHandler,
     StatsUsageHandler,
     StatsUserHandler,
@@ -1472,7 +1473,9 @@ def get_handlers() -> list[tuple[str, type]]:
         (r"/admin/api/quota/([^/]+)", QuotaAPIHandler),
         (r"/api/quota/rates", QuotaRatesAPIHandler),
         (r"/api/quota/me", UserQuotaInfoHandler),
-        # Usage stats API
+        # User-facing stats
+        (r"/api/stats/me", StatsMyUsageHandler),
+        # Admin usage stats API
         (r"/admin/api/stats/overview", StatsOverviewHandler),
         (r"/admin/api/stats/usage", StatsUsageHandler),
         (r"/admin/api/stats/distribution", StatsDistributionHandler),
@@ -1502,6 +1505,7 @@ __all__ = [
     "QuotaRatesAPIHandler",
     "UserQuotaInfoHandler",
     "ResourcesAPIHandler",
+    "StatsMyUsageHandler",
     "GitHubReposHandler",
     # Group management handlers
     "GroupsAPIHandler",

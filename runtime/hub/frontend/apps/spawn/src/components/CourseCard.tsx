@@ -43,15 +43,18 @@ interface Props {
 
 function formatResourceTag(resource: Resource): string {
   const req = resource.requirements;
-  const memory = req.memory.replace('Gi', 'GB');
-  let tag = `${req.cpu} CPU, ${memory}`;
+  const parts: string[] = [];
+  const cpu = parseFloat(req.cpu);
+  if (cpu > 0) parts.push(`${req.cpu} CPU`);
+  const memNum = parseFloat(req.memory);
+  if (memNum > 0) parts.push(req.memory.replace('Gi', 'GB'));
   if (req['amd.com/gpu']) {
-    tag += `, 1 ${resource.metadata?.accelerator ?? 'GPU'}`;
+    parts.push(`1 ${resource.metadata?.accelerator ?? 'GPU'}`);
   }
   if (req['amd.com/npu']) {
-    tag += `, 1 NPU`;
+    parts.push('1 NPU');
   }
-  return tag;
+  return parts.join(', ');
 }
 
 export const CourseCard = memo(function CourseCard({

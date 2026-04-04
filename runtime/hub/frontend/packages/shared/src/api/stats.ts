@@ -1,7 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-import { adminApiRequest } from "./client.js";
+import { apiRequest, adminApiRequest } from "./client.js";
 import type {
   DashboardOverview,
   StatsDistributionResponse,
@@ -28,6 +28,10 @@ export async function getHourlyDistribution(days = 30): Promise<{ hourly: import
 
 export async function getUserDetail(username: string, days = 30, granularity: "day" | "week" = "day"): Promise<UserDetail> {
   return adminApiRequest<UserDetail>(`/stats/user/${encodeURIComponent(username)}?days=${days}&granularity=${granularity}`);
+}
+
+export async function getMyUsage(days = 30, granularity: "day" | "week" = "day"): Promise<UserDetail> {
+  return apiRequest<UserDetail>(`/stats/me?days=${days}&granularity=${granularity}`);
 }
 
 export function createActiveSessionsSSE(

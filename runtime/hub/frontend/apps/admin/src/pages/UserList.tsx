@@ -28,6 +28,7 @@ import { BatchPasswordModal } from '../components/BatchPasswordModal';
 import { EditUserModal } from '../components/EditUserModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { UserDetailModal } from '../components/UserDetailModal';
+import { QuotaRefreshModal } from '../components/QuotaRefreshModal';
 
 // Map frontend sort columns to API sort parameters
 // JupyterHub API only supports: id, name, last_activity
@@ -402,6 +403,7 @@ export function UserList() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [showBatchPasswordModal, setShowBatchPasswordModal] = useState(false);
+  const [showQuotaRefreshModal, setShowQuotaRefreshModal] = useState(false);
   const [usageUsername, setUsageUsername] = useState<string | null>(null);
 
   const jhdata = window.jhdata ?? {};
@@ -797,14 +799,23 @@ export function UserList() {
             {actionLoading === 'stop-all' ? <Spinner animation="border" size="sm" /> : 'Stop All'}
           </Button>
           {quotaEnabled && (
-            <Button
-              variant="secondary"
-              onClick={() => setShowBatchQuotaModal(true)}
-              disabled={selectedUsers.size === 0}
-              title={selectedUsers.size === 0 ? 'Select users first' : `Set quota for ${selectedUsers.size} users`}
-            >
-              Set Quota ({selectedUsers.size})
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setShowBatchQuotaModal(true)}
+                disabled={selectedUsers.size === 0}
+                title={selectedUsers.size === 0 ? 'Select users first' : `Set quota for ${selectedUsers.size} users`}
+              >
+                Set Quota ({selectedUsers.size})
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setShowQuotaRefreshModal(true)}
+                title="Refresh quota for all users"
+              >
+                <i className="bi bi-arrow-clockwise me-1" />Refresh Quota
+              </Button>
+            </>
           )}
           <Button
             variant="secondary"
@@ -830,7 +841,31 @@ export function UserList() {
           </Button>
         </div>
         <div className="d-flex gap-2">
-<Button
+          <Button
+            variant="outline-secondary"
+            onClick={() => {
+              const headers = ['Username', 'Admin', 'Server', 'Last Activity'];
+              if (quotaEnabled) headers.splice(2, 0, 'Quota');
+              const rows = users.map(u => {
+                const row = [u.name, u.admin ? 'Yes' : 'No', u.server ? 'Running' : 'Stopped', u.last_activity ?? ''];
+                if (quotaEnabled) {
+                  const q = quotaMap.get(u.name);
+                  row.splice(2, 0, q?.unlimited ? 'Unlimited' : String(q?.balance ?? 0));
+                }
+                return row;
+              });
+              const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url; a.download = 'users.csv'; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            disabled={users.length === 0}
+            title="Export current page as CSV"
+          >
+            <i className="bi bi-download me-1" /> Export
+          </Button>
+          <Button
             variant="outline-secondary"
             as="a"
             href={`${baseUrl}admin`}
@@ -1096,6 +1131,13 @@ export function UserList() {
       <UserDetailModal
         username={usageUsername}
         onClose={() => setUsageUsername(null)}
+      />
+
+      {/* Quota Refresh Modal */}
+      <QuotaRefreshModal
+        show={showQuotaRefreshModal}
+        onHide={() => setShowQuotaRefreshModal(false)}
+        onSuccess={loadQuota}
       />
     </div>
   );

@@ -394,6 +394,32 @@ class StatsUserHandler(APIHandler):
         }
 
 
+class StatsMyUsageHandler(APIHandler):
+    """Current user's own usage stats (no admin required)."""
+
+    @web.authenticated
+    async def get(self):
+        assert self.current_user is not None
+        username = self.current_user.name
+
+        try:
+            days = int(self.get_argument("days", "30"))
+            days = max(1, min(days, 365))
+        except ValueError:
+            days = 30
+
+        granularity = self.get_argument("granularity", "day")
+        if granularity not in ("day", "week"):
+            granularity = "day"
+
+        loop = __import__("asyncio").get_event_loop()
+        result = await loop.run_in_executor(
+            None, StatsUserHandler._query, None, username, days, granularity
+        )
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(result))
+
+
 class StatsHourlyHandler(APIHandler):
     """Usage distribution by hour of day."""
 

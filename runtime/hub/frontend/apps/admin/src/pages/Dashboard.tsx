@@ -85,6 +85,15 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
   );
 }
 
+function downloadCsv(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function Dashboard() {
@@ -172,6 +181,20 @@ export function Dashboard() {
             max={today}
             onChange={e => setEndDate(e.target.value)}
           />
+          <button
+            className="btn btn-outline-secondary btn-sm tw:ml-2"
+            title="Export CSV"
+            onClick={() => {
+              if (dailyUsage.length > 0) {
+                downloadCsv(`usage-${startDate}-${endDate}.csv`,
+                  ['Date', 'Minutes', 'Active Users'],
+                  dailyUsage.map(d => [d.date, String(d.minutes), String(d.users)]));
+              }
+            }}
+            disabled={dailyUsage.length === 0}
+          >
+            <i className="bi bi-download tw:mr-1" /> Export
+          </button>
         </div>
       </div>
 

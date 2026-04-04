@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useNavigate, useLocation } from 'react-router-dom';
+import { ThemeToggle } from './ThemeToggle';
 
 const tabs = [
   { path: '/users', label: 'Users', icon: 'bi-people' },
@@ -22,7 +23,7 @@ export function NavBar() {
         <span>›</span>
         <span>Administration</span>
       </div>
-      <h1>Administration</h1>
+      <h1>Administration <ThemeToggle /></h1>
       <nav className="admin-nav">
         {tabs.map((tab) => (
           <button

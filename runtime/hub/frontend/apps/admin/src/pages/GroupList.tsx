@@ -221,6 +221,10 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
             <Badge bg="secondary" title="Manually managed group">Manual</Badge>
           )}
         </div>
+        <div style={{ fontSize: '0.7rem', color: 'var(--home-text-muted)', marginTop: '2px' }}>
+          {group.users.length} {group.users.length === 1 ? 'member' : 'members'}
+          {(group.resources?.length ?? 0) > 0 && ` · ${group.resources!.length} resources`}
+        </div>
       </td>
       <td>
         <AsyncSelect<UserOption, true>

@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Resource, ResourceGroup } from "@auplc/shared";
-import { getResources } from "@auplc/shared";
+import type { Resource, ResourceGroup, UserQuotaInfo, UserDetail } from "@auplc/shared";
+import { getResources, getMyQuota, getMyUsage } from "@auplc/shared";
+
+type Theme = "light" | "dark";
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem("auplc-theme") as Theme | null;
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+function applyTheme(t: Theme) {
+  document.documentElement.setAttribute("data-bs-theme", t);
+  localStorage.setItem("auplc-theme", t);
+}
+applyTheme(getInitialTheme());
 
 interface HomeData {
   server_active: boolean;
@@ -29,11 +41,14 @@ const homeData: HomeData = window.HOME_DATA ?? {
 
 function formatResourceSpecs(r: Resource): string {
   const req = r.requirements;
-  const mem = req.memory.replace("Gi", "GB");
-  let spec = `${req.cpu} CPU, ${mem}`;
-  if (req["amd.com/gpu"]) spec += `, ${req["amd.com/gpu"]} GPU`;
-  if (req["amd.com/npu"]) spec += `, ${req["amd.com/npu"]} NPU`;
-  return spec;
+  const parts: string[] = [];
+  const cpu = parseFloat(req.cpu);
+  if (cpu > 0) parts.push(`${req.cpu} CPU`);
+  const memNum = parseFloat(req.memory);
+  if (memNum > 0) parts.push(req.memory.replace("Gi", "GB"));
+  if (req["amd.com/gpu"]) parts.push(`${req["amd.com/gpu"]} GPU`);
+  if (req["amd.com/npu"]) parts.push(`${req["amd.com/npu"]} NPU`);
+  return parts.join(", ");
 }
 
 function getAcceleratorType(r: Resource): "gpu" | "npu" | "cpu" {
@@ -42,14 +57,63 @@ function getAcceleratorType(r: Resource): "gpu" | "npu" | "cpu" {
   return "cpu";
 }
 
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+
+function formatMins(m: number): string {
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r > 0 ? `${h}h ${r}m` : `${h}h`;
+}
+
 function App() {
   const [serverActive, setServerActive] = useState(homeData.server_active);
   const [stopping, setStopping] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
+  const [usageData, setUsageData] = useState<UserDetail | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [groups, setGroups] = useState<ResourceGroup[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
   const [resourcesError, setResourcesError] = useState<string | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
+  const [quota, setQuota] = useState<UserQuotaInfo | null>(null);
+
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const toggleTheme = useCallback(() => {
+    setTheme(t => {
+      const next = t === "light" ? "dark" : "light";
+      applyTheme(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    getMyQuota().then(setQuota).catch(() => {});
+  }, []);
+
+  // Poll server status every 15s to keep launch bar in sync
+  useEffect(() => {
+    const poll = () => {
+      fetch(`${baseUrl}api/users/${jhdata.user ?? "student"}`, {
+        headers: { Accept: "application/json" },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) setServerActive(Boolean(data.server));
+        })
+        .catch(() => {});
+    };
+    const id = setInterval(poll, 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     fetch(`${baseUrl}static/announcement.txt`)
@@ -89,34 +153,48 @@ function App() {
       .finally(() => setResourcesLoading(false));
   }, []);
 
-  const handleStop = useCallback(
-    async (e: React.MouseEvent) => {
+  const handleStopClick = useCallback(
+    (e: React.MouseEvent) => {
       e.preventDefault();
       e.nativeEvent.stopImmediatePropagation();
       if (stopping) return;
-      setStopping(true);
-      setStopError(null);
-      try {
-        const resp = await fetch(
-          `${baseUrl}api/users/${jhdata.user}/server`,
-          {
-            method: "DELETE",
-            headers: { "X-XSRFToken": jhdata.xsrf_token ?? "" },
-          },
-        );
-        if (resp.ok || resp.status === 204 || resp.status === 202) {
-          setServerActive(false);
-        } else {
-          setStopError(`Failed to stop server (HTTP ${resp.status})`);
-        }
-      } catch {
-        setStopError("Network error — could not reach the server");
-      } finally {
-        setStopping(false);
-      }
+      setShowStopConfirm(true);
     },
     [stopping],
   );
+
+  const doStop = useCallback(async () => {
+    setShowStopConfirm(false);
+    setStopping(true);
+    setStopError(null);
+    try {
+      const resp = await fetch(
+        `${baseUrl}api/users/${jhdata.user}/server`,
+        {
+          method: "DELETE",
+          headers: { "X-XSRFToken": jhdata.xsrf_token ?? "" },
+        },
+      );
+      if (resp.ok || resp.status === 204 || resp.status === 202) {
+        setServerActive(false);
+      } else {
+        setStopError(`Failed to stop server (HTTP ${resp.status})`);
+      }
+    } catch {
+      setStopError("Network error — could not reach the server");
+    } finally {
+      setStopping(false);
+    }
+  }, []);
+
+  const openUsage = useCallback(() => {
+    setShowUsage(true);
+    setUsageLoading(true);
+    getMyUsage(30)
+      .then(setUsageData)
+      .catch(() => setUsageData(null))
+      .finally(() => setUsageLoading(false));
+  }, []);
 
   const totalResources = groups.reduce(
     (sum, g) => sum + g.resources.length,
@@ -127,7 +205,26 @@ function App() {
     <div className="home-page">
       {/* Hero */}
       <section className="home-hero">
-        <div className="container">
+        <div className="container" style={{ position: "relative" }}>
+          <nav className="hero-nav">
+            <a href={`${baseUrl}spawn`}>
+              <i className="fa fa-rocket"></i> Launch Server
+            </a>
+            <button className="hero-nav-btn" onClick={openUsage} type="button">
+              <i className="fa fa-bar-chart"></i> Usage
+            </button>
+            {Boolean((jhdata as Record<string, unknown>).admin) && (
+              <a href={`${baseUrl}admin/users`}>
+                <i className="fa fa-cog"></i> Admin
+              </a>
+            )}
+            <button className="theme-toggle" onClick={toggleTheme} title={theme === "light" ? "Dark mode" : "Light mode"}>
+              <i className={`fa ${theme === "light" ? "fa-moon-o" : "fa-sun-o"}`}></i>
+            </button>
+          </nav>
+          <p className="hero-greeting">
+            {getGreeting()}, {jhdata.user ?? "student"}
+          </p>
           <h1>
             Welcome to <span className="accent">AUP Learning Cloud</span>
           </h1>
@@ -168,6 +265,12 @@ function App() {
                 : serverActive
                   ? 'Your server is running \u2014 click "My Server" to open JupyterLab'
                   : "Choose a resource below and launch your Jupyter environment"}
+              {quota?.enabled && (
+                <span className="lb-quota-inline">
+                  {" · Quota: "}
+                  {quota.unlimited ? "Unlimited" : `${quota.balance}h remaining`}
+                </span>
+              )}
             </div>
           </div>
           <div className="lb-actions">
@@ -176,8 +279,8 @@ function App() {
                 <a
                   id="stop"
                   role="button"
-                  className="btn-home-sm danger"
-                  onClick={handleStop}
+                  className={`btn-home-sm danger${stopping ? " disabled" : ""}`}
+                  onClick={handleStopClick}
                 >
                   <i
                     className={`fa ${stopping ? "fa-spinner fa-spin" : "fa-stop"}`}
@@ -187,10 +290,12 @@ function App() {
                 <a
                   id="start"
                   role="button"
-                  className="btn-launch"
-                  href={homeData.server_url}
+                  className={`btn-launch${stopping ? " disabled" : ""}`}
+                  href={stopping ? undefined : homeData.server_url}
+                  onClick={stopping ? (e: React.MouseEvent) => e.preventDefault() : undefined}
                 >
-                  <i className="fa fa-external-link"></i> My Server
+                  <i className={`fa ${stopping ? "fa-spinner fa-spin" : "fa-external-link"}`}></i>
+                  {stopping ? " Stopping\u2026" : " My Server"}
                 </a>
               </>
             ) : (
@@ -207,7 +312,7 @@ function App() {
         </div>
       </div>
 
-      {/* Quick Start (compact strip) */}
+      {/* Quick Start */}
       <div className="container">
         <section className="home-section" style={{ paddingBottom: "0.5rem" }}>
           <div className="qs-strip">
@@ -241,13 +346,19 @@ function App() {
         <section className="home-section">
           <div className="home-section-header">
             <h2>Available Resources</h2>
-            <a href={`${baseUrl}spawn`}>
-              View all options{" "}
-              <i
-                className="fa fa-arrow-right"
-                style={{ fontSize: "0.7rem" }}
-              ></i>
-            </a>
+            {serverActive ? (
+              <span style={{ fontSize: "0.78rem", color: "var(--home-text-muted)" }}>
+                <i className="fa fa-info-circle"></i> Stop your server to launch a different resource
+              </span>
+            ) : (
+              <a href={`${baseUrl}spawn`}>
+                View all options{" "}
+                <i
+                  className="fa fa-arrow-right"
+                  style={{ fontSize: "0.7rem" }}
+                ></i>
+              </a>
+            )}
           </div>
 
           {resourcesLoading ? (
@@ -285,9 +396,13 @@ function App() {
                     const accelType = getAcceleratorType(resource);
                     return (
                       <a
-                        className="resource-card"
-                        href={`${baseUrl}spawn?resource=${encodeURIComponent(resource.key)}`}
+                        className={`resource-card${serverActive ? " disabled" : ""}`}
+                        href={serverActive ? undefined : `${baseUrl}spawn?resource=${encodeURIComponent(resource.key)}`}
                         key={resource.key}
+                        onClick={(e) => {
+                          if (serverActive) { e.preventDefault(); }
+                        }}
+                        title={serverActive ? "Stop your running server first" : undefined}
                       >
                         <div className="resource-card-top">
                           <div className="resource-card-info">
@@ -444,6 +559,111 @@ function App() {
           AUP Learning Cloud
         </div>
       </div>
+
+      {/* Stop Server Confirm Modal */}
+      {/* Stop Server Confirm Modal */}
+      {showStopConfirm && (
+        <div className="confirm-overlay" onClick={() => setShowStopConfirm(false)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-icon">
+              <i className="fa fa-exclamation-triangle"></i>
+            </div>
+            <h3>Stop Server?</h3>
+            <p>Any unsaved work in your notebooks may be lost. Are you sure you want to stop?</p>
+            <div className="confirm-actions">
+              <button className="btn-home-sm" onClick={() => setShowStopConfirm(false)}>
+                Cancel
+              </button>
+              <button className="btn-home-sm danger" onClick={doStop}>
+                <i className="fa fa-stop"></i> Stop Server
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Usage Modal */}
+      {showUsage && (
+        <div className="confirm-overlay" onClick={() => setShowUsage(false)}>
+          <div className="usage-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="usage-modal-header">
+              <h3><i className="fa fa-bar-chart"></i> My Usage</h3>
+              <button className="usage-close" onClick={() => setShowUsage(false)}>
+                <i className="fa fa-times"></i>
+              </button>
+            </div>
+            {usageLoading ? (
+              <div className="usage-loading">
+                <i className="fa fa-spinner fa-spin"></i> Loading usage data…
+              </div>
+            ) : !usageData ? (
+              <div className="usage-loading">No usage data available yet.</div>
+            ) : (
+              <div className="usage-body">
+                <div className="usage-stats-row">
+                  <div className="usage-stat">
+                    <div className="usage-stat-value">{formatMins(usageData.total_minutes)}</div>
+                    <div className="usage-stat-label">Total Usage</div>
+                  </div>
+                  <div className="usage-stat">
+                    <div className="usage-stat-value">{usageData.total_sessions}</div>
+                    <div className="usage-stat-label">Sessions</div>
+                  </div>
+                  <div className="usage-stat">
+                    <div className="usage-stat-value">
+                      {usageData.total_sessions > 0
+                        ? formatMins(Math.round(usageData.total_minutes / usageData.total_sessions))
+                        : "—"}
+                    </div>
+                    <div className="usage-stat-label">Avg / Session</div>
+                  </div>
+                </div>
+
+                {usageData.by_resource.length > 0 && (
+                  <div className="usage-section">
+                    <h4>By Resource</h4>
+                    <div className="usage-resource-list">
+                      {usageData.by_resource.map((r) => (
+                        <div className="usage-resource-item" key={r.resource_type}>
+                          <span className="usage-resource-name">
+                            {r.resource_display ?? r.resource_type}
+                          </span>
+                          <span className="usage-resource-detail">
+                            {formatMins(r.minutes)} · {r.sessions} sessions
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {usageData.recent_sessions.length > 0 && (
+                  <div className="usage-section">
+                    <h4>Recent Sessions</h4>
+                    <div className="usage-sessions-list">
+                      {usageData.recent_sessions.slice(0, 10).map((s, i) => (
+                        <div className="usage-session-item" key={i}>
+                          <div className="usage-session-name">
+                            {s.resource_display ?? s.resource_type}
+                            {s.accelerator_display && (
+                              <span className="usage-session-accel"> · {s.accelerator_display}</span>
+                            )}
+                          </div>
+                          <div className="usage-session-meta">
+                            {s.start_time.slice(0, 16).replace("T", " ")}
+                            {s.duration_minutes != null && ` · ${formatMins(s.duration_minutes)}`}
+                            <span className={`usage-session-status ${s.status}`}>{s.status}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

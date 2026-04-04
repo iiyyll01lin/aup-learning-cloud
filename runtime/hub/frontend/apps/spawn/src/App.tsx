@@ -20,6 +20,18 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { Resource, Accelerator, GitHubRepo } from '@auplc/shared';
 import { validateRepo, fetchGitHubRepos, isCurrentUserGitHub } from '@auplc/shared';
+
+type Theme = 'light' | 'dark';
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem('auplc-theme') as Theme | null;
+  if (stored === 'light' || stored === 'dark') return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function applyTheme(t: Theme) {
+  document.documentElement.setAttribute('data-bs-theme', t);
+  localStorage.setItem('auplc-theme', t);
+}
+applyTheme(getInitialTheme());
 import { CategorySection } from './components/CategorySection';
 import { useResources } from './hooks/useResources';
 import { useAccelerators } from './hooks/useAccelerators';
@@ -81,7 +93,18 @@ function App() {
   const [repoValidating, setRepoValidating] = useState(false);
   const [repoValid, setRepoValid] = useState(false);
   const [paramWarning, setParamWarning] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('auplc-favorites');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
   const validateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const toggleTheme = useCallback(() => {
+    setTheme(t => { const n = t === 'light' ? 'dark' : 'light'; applyTheme(n); return n; });
+  }, []);
   const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
   const [githubAppInstalled, setGithubAppInstalled] = useState(false);
 
@@ -183,7 +206,37 @@ function App() {
   }, [quota, selectedAccelerator?.quotaRate, runtime]);
   const canStart = selectedResource && canAfford && !repoUrlError && !repoValidating;
 
-  const nonEmptyGroups = useMemo(() => groups.filter(g => g.resources.length > 0), [groups]);
+  const toggleFavorite = useCallback((key: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      localStorage.setItem('auplc-favorites', JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
+  const favoritesGroup = useMemo(() => {
+    if (favorites.size === 0) return null;
+    const favResources = resources.filter(r => favorites.has(r.key));
+    if (favResources.length === 0) return null;
+    return { name: '__favorites__', displayName: '⭐ Favorites', resources: favResources };
+  }, [favorites, resources]);
+
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery.trim()) return groups.filter(g => g.resources.length > 0);
+    const q = searchQuery.toLowerCase();
+    return groups
+      .map(g => ({
+        ...g,
+        resources: g.resources.filter(r =>
+          r.key.toLowerCase().includes(q) ||
+          (r.metadata?.description ?? '').toLowerCase().includes(q) ||
+          (r.metadata?.subDescription ?? '').toLowerCase().includes(q)
+        ),
+      }))
+      .filter(g => g.resources.length > 0);
+  }, [groups, searchQuery]);
   const totalResources = resources.length;
 
   const handleToggleGroup = useCallback((groupName: string) => {
@@ -290,6 +343,9 @@ function App() {
           <a href={homeUrl}>Home</a>
           <span>/</span>
           <span>Launch Server</span>
+          <button className="spawn-theme-toggle" onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
         </div>
         <h1>Launch Your Server</h1>
         <p>Select a resource, configure your environment, and launch</p>
@@ -317,8 +373,45 @@ function App() {
               <h2>Choose a Resource</h2>
               <span className="picker-count">{totalResources} {totalResources === 1 ? 'resource' : 'resources'}</span>
             </div>
+            <div className="picker-search">
+              <input
+                type="text"
+                className="sidebar-git-input"
+                placeholder="Search resources..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
             <div className="picker-body">
-              {nonEmptyGroups.map((group) => (
+              {favoritesGroup && !searchQuery && (
+                <CategorySection
+                  key="__favorites__"
+                  group={favoritesGroup}
+                  expanded={expandedGroup === '__favorites__'}
+                  onToggle={handleToggleGroup}
+                  selectedResource={selectedResource}
+                  onSelectResource={handleSelectResource}
+                  onClearResource={handleClearResource}
+                  accelerators={accelerators}
+                  selectedAccelerator={selectedAccelerator}
+                  onSelectAccelerator={handleSelectAccelerator}
+                  repoUrl={repoUrl}
+                  repoUrlError={repoUrlError}
+                  repoValidating={repoValidating}
+                  repoValid={repoValid}
+                  repoBranch={repoBranch}
+                  onRepoUrlChange={handleRepoUrlChange}
+                  allowedGitProviders={allowedGitProviders}
+                  githubAppName={githubAppName}
+                  githubRepos={githubRepos}
+                  githubAppInstalled={githubAppInstalled}
+                  onSelectGitHubRepo={handleSelectGitHubRepo}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
+                />
+              )}
+              {filteredGroups.map((group) => (
                 <CategorySection
                   key={group.name}
                   group={group}
@@ -341,6 +434,8 @@ function App() {
                   githubRepos={githubRepos}
                   githubAppInstalled={githubAppInstalled}
                   onSelectGitHubRepo={handleSelectGitHubRepo}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
                 />
               ))}
             </div>
@@ -443,6 +538,13 @@ function App() {
                       {' · '}Remaining: <strong style={{ color: canAfford ? '#2e7d32' : '#c62828' }}>{(quota?.balance ?? 0) - cost}</strong>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Quota warning */}
+              {quota?.enabled && !quota?.unlimited && !canAfford && selectedResource && (
+                <div className="sidebar-quota-warning">
+                  <strong>Insufficient Quota</strong> — You need {cost} credits but only have {quota?.balance ?? 0}. Reduce runtime or contact an administrator.
                 </div>
               )}
 
