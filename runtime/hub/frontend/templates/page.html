@@ -93,6 +93,24 @@ SOFTWARE.
       <script src="{{static_url("js/darkmode.js") }}"
               type="text/javascript"
               charset="utf-8"></script>
+      <script type="text/javascript">
+        // Keep auplc-theme (React apps) and jupyterhub-bs-theme (darkmode.js)
+        // in sync by observing data-bs-theme attribute changes on <html>.
+        (function() {
+          var obs = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+              if (m.attributeName === 'data-bs-theme') {
+                var t = document.documentElement.getAttribute('data-bs-theme');
+                if (t) {
+                  localStorage.setItem('auplc-theme', t);
+                  localStorage.setItem('jupyterhub-bs-theme', t);
+                }
+              }
+            });
+          });
+          obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+        })();
+      </script>
     {% endblock scripts %}
     {# djlint js formatting doesn't handle template blocks in js #}
     {# djlint: off #}
