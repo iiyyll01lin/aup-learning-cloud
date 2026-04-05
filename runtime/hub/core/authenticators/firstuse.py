@@ -79,15 +79,35 @@ class CustomFirstUseAuthenticator(FirstUseAuthenticator):
         finally:
             session.close()
 
+    MIN_PASSWORD_LENGTH = 8
+
+    @staticmethod
+    def _check_password_strength(password: str) -> str | None:
+        """Return an error message if the password is too weak, or None if OK."""
+        import re
+
+        min_len = CustomFirstUseAuthenticator.MIN_PASSWORD_LENGTH
+        if not password or len(password) < min_len:
+            return f"Password must be at least {min_len} characters"
+        if not re.search(r"[A-Z]", password):
+            return "Password must contain at least one uppercase letter"
+        if not re.search(r"[a-z]", password):
+            return "Password must contain at least one lowercase letter"
+        if not re.search(r"\d", password):
+            return "Password must contain at least one digit"
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]", password):
+            return "Password must contain at least one special character"
+        return None
+
     def _validate_password(self, password):
-        """Validate password meets minimum requirements."""
-        return password and len(password) >= getattr(self, "min_password_length", 1)
+        """Validate password meets strength requirements."""
+        return self._check_password_strength(password) is None
 
     def set_password(self, username: str, password: str, force_change: bool = True) -> str:
         """Set password for a user."""
-        if not self._validate_password(password):
-            min_len = getattr(self, "min_password_length", 1)
-            return f"Password too short! Minimum {min_len} characters required."
+        strength_error = self._check_password_strength(password)
+        if strength_error:
+            return strength_error
 
         password_hash = bcrypt.hashpw(password.encode("utf8"), bcrypt.gensalt())
 
@@ -121,21 +141,20 @@ class CustomFirstUseAuthenticator(FirstUseAuthenticator):
         Returns:
             Dict with 'success', 'failed' counts and 'results' list.
         """
-        min_len = getattr(self, "min_password_length", 1)
         results = {"success": 0, "failed": 0, "results": []}
 
-        # Validate passwords first
         valid_entries = []
         for entry in users:
             username = entry["username"]
             password = entry["password"]
-            if not password or len(password) < min_len:
+            strength_error = self._check_password_strength(password)
+            if strength_error:
                 results["failed"] += 1
                 results["results"].append(
                     {
                         "username": username,
                         "status": "failed",
-                        "error": f"Password too short (min {min_len})",
+                        "error": strength_error,
                     }
                 )
                 continue
@@ -233,7 +252,7 @@ class CustomFirstUseAuthenticator(FirstUseAuthenticator):
         else:
             # First use: set the password
             if not self._validate_password(password):
-                self.log.warning(f"Password too short for new user {username}")
+                self.log.warning(f"Password too weak for new user {username}")
                 return None
             self.set_password(username, password, force_change=False)
             self.log.info(f"Password set for new user {username}")

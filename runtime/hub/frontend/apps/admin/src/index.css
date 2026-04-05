@@ -324,6 +324,61 @@ body {
   color: var(--home-primary-hover) !important;
 }
 
+/* ---- Dropdowns ---- */
+
+.dropdown-menu {
+  background: var(--home-surface-0) !important;
+  border: 1px solid var(--home-border) !important;
+  border-radius: var(--home-radius-sm) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important;
+  padding: 0.35rem !important;
+  min-width: 10rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+[data-bs-theme="dark"] .dropdown-menu {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35) !important;
+}
+
+.dropdown-item {
+  font-size: 0.82rem !important;
+  font-weight: 500;
+  color: var(--home-text) !important;
+  border-radius: 8px !important;
+  padding: 0.45rem 0.75rem !important;
+  transition: background 0.12s;
+}
+
+.dropdown-item:hover, .dropdown-item:focus {
+  background: var(--home-surface-1) !important;
+  color: var(--home-text) !important;
+}
+
+.dropdown-item.text-danger {
+  color: var(--home-red) !important;
+}
+
+.dropdown-item.text-danger:hover, .dropdown-item.text-danger:focus {
+  background: rgba(192,57,43,0.08) !important;
+  color: var(--home-red) !important;
+}
+
+[data-bs-theme="dark"] .dropdown-item.text-danger:hover,
+[data-bs-theme="dark"] .dropdown-item.text-danger:focus {
+  background: rgba(255,69,58,0.12) !important;
+}
+
+.dropdown-divider {
+  border-color: var(--home-border) !important;
+  margin: 0.25rem 0 !important;
+}
+
+/* Action dropdown toggle — minimal style */
+.dropdown-toggle.btn-light::after {
+  display: none;
+}
+
+
 /* Button groups — use regular rounding instead of pill */
 .btn-group > .btn {
   border-radius: 0 !important;

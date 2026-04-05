@@ -159,18 +159,29 @@ class ChangePasswordHandler(BaseHandler):
         new_password = self.get_body_argument("new_password", default=None)
         confirm_password = self.get_body_argument("confirm_password", default=None)
 
+        def _render_error(msg: str):
+            return self.render_template(
+                "change-password.html",
+                password_changed=False,
+                forced_change=False,
+                error_message=msg,
+            )
+
         if not all([current_password, new_password, confirm_password]):
+            html = await _render_error("All fields are required")
             self.set_status(400)
-            return self.finish("All fields are required")
+            return self.finish(html)
 
         if new_password != confirm_password:
+            html = await _render_error("New passwords do not match")
             self.set_status(400)
-            return self.finish("New passwords do not match")
+            return self.finish(html)
 
         username = user.name
         if username.startswith("github:"):
+            html = await _render_error("GitHub users cannot change password here")
             self.set_status(400)
-            return self.finish("GitHub users cannot change password here")
+            return self.finish(html)
 
         firstuse_auth = None
         if isinstance(self.authenticator, MultiAuthenticator):
@@ -180,25 +191,29 @@ class ChangePasswordHandler(BaseHandler):
                     break
 
         if not firstuse_auth:
+            html = await _render_error("Password change not available")
             self.set_status(500)
-            return self.finish("Password change not available")
+            return self.finish(html)
 
         auth_result = await firstuse_auth.authenticate(self, {"username": username, "password": current_password})
 
         if not auth_result:
+            html = await _render_error("Current password is incorrect")
             self.set_status(403)
-            return self.finish("Current password is incorrect")
+            return self.finish(html)
 
         try:
             result = firstuse_auth.set_password(username, new_password, force_change=False)
-            if "too short" in result.lower():
+            if not result.startswith("Password set for"):
+                html = await _render_error(result)
                 self.set_status(400)
-                return self.finish(result)
+                return self.finish(html)
             self.redirect(self.hub.base_url + "auth/change-password?password_changed=1")
         except Exception as e:
             self.log.error(f"Failed to change password for {username}: {e}")
+            html = await _render_error("Failed to change password")
             self.set_status(500)
-            self.finish("Failed to change password")
+            self.finish(html)
 
 
 class AdminResetPasswordHandler(BaseHandler):
@@ -271,10 +286,12 @@ class AdminResetPasswordHandler(BaseHandler):
             return self.redirect(self.hub.base_url + "admin/reset-password?error=Password+reset+not+available")
 
         try:
-            result = firstuse_auth.reset_password(username, new_password)
-            if "too short" in result.lower():
+            result = firstuse_auth.set_password(username, new_password, force_change=force_change)
+            if not result.startswith("Password set for"):
+                from urllib.parse import quote_plus
+
                 return self.redirect(
-                    self.hub.base_url + f"admin/reset-password?user={target_user}&error=Password+too+short"
+                    self.hub.base_url + f"admin/reset-password?user={target_user}&error={quote_plus(result)}"
                 )
 
             if force_change:
@@ -353,7 +370,7 @@ class AdminAPISetPasswordHandler(APIHandler):
 
             result = firstuse_auth.set_password(username, password, force_change=force_change)
 
-            if "too short" in result.lower():
+            if not result.startswith("Password set for"):
                 self.set_status(400)
                 self.set_header("Content-Type", "application/json")
                 return self.finish(json.dumps({"error": result}))

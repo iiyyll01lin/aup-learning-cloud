@@ -243,10 +243,10 @@ const UserRow = memo(function UserRow({
               </Button>
             )}
             <Dropdown>
-              <Dropdown.Toggle variant="light" size="sm" id={`actions-${user.name}`}>
+              <Dropdown.Toggle variant="light" size="sm" id={`actions-${user.name}`} bsPrefix="btn">
                 <i className="bi bi-three-dots-vertical" />
               </Dropdown.Toggle>
-              <Dropdown.Menu align="end">
+              <Dropdown.Menu align="end" popperConfig={{ strategy: 'fixed' }} renderOnMount>
                 <Dropdown.Item href={`${baseUrl}spawn/${user.name}`}>
                   <i className="bi bi-rocket me-2" />Spawn Page
                 </Dropdown.Item>
