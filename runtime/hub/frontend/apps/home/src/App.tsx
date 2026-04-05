@@ -534,7 +534,11 @@ function App() {
                   <div className="news-card">
                     <div className="news-meta">Announcement</div>
                     <h4>Platform Announcement</h4>
-                    <p>{announcement}</p>
+                    {/<[a-z][\s\S]*>/i.test(announcement) ? (
+                      <div dangerouslySetInnerHTML={{ __html: announcement }} />
+                    ) : (
+                      <p>{announcement}</p>
+                    )}
                   </div>
                 )}
                 <div className="news-card">
