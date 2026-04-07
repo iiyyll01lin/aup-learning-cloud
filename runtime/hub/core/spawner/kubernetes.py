@@ -39,6 +39,15 @@ from jupyterhub.user import User as JupyterHubUser
 from kubespawner import KubeSpawner
 from tornado import web
 
+from core.metrics import (
+    pod_failure_total,
+    repo_clone_failed_total,
+    session_runtime_minutes,
+    spawn_duration_seconds,
+    spawn_failed_total,
+    spawn_gpu_total,
+)
+
 if TYPE_CHECKING:
     from core.config import HubConfig
 
@@ -474,7 +483,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         clone_dir = f"{home_mount_path}/{repo_name}"
 
-        env = [
+        env: list[dict[str, Any]] = [
             {"name": "REPO_URL", "value": repo_url},
             {"name": "CLONE_DIR", "value": clone_dir},
             {"name": "MAX_CLONE_TIMEOUT", "value": str(self.MAX_CLONE_TIMEOUT)},
@@ -701,6 +710,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
         # Determine accelerator type for quota calculation
         accelerator_type = gpu_selection if gpu_selection else "cpu"
 
+        # Prometheus metric: spawn attempt
+        with contextlib.suppress(Exception):
+            spawn_gpu_total.labels(accelerator=accelerator_type).inc()
+
         from core.quota import get_quota_manager
 
         quota_manager = get_quota_manager()
@@ -727,6 +740,8 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
                 if not can_start:
                     print(f"[QUOTA] Blocked container start for {username}: {message}")
+                    with contextlib.suppress(Exception):
+                        spawn_failed_total.labels(reason="quota").inc()
                     raise web.HTTPError(
                         403,
                         f"Cannot start container: {message}. Please contact administrator to add quota.",
@@ -740,6 +755,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
             self._has_unlimited_quota = True
 
         start_time = int(time.time())
+
+        # Track spawn start time for metrics
+        self._spawn_start_timestamp = time.time()
 
         # Calculate quota rate for this accelerator type
         quota_rate = self.get_quota_rate(accelerator_type) if self.quota_enabled else 0
@@ -853,6 +871,16 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 if monitor_task in done and not monitor_task.cancelled():
                     monitor_task.result()  # re-raises failure RuntimeError
                 start_result = start_task.result()
+
+                # Record spawn duration metric
+                try:
+                    if hasattr(self, "_spawn_start_timestamp"):
+                        duration = time.time() - self._spawn_start_timestamp
+                        spawn_duration_seconds.observe(duration)
+                        accelerator_type = self.user_options.get("gpu_selection") or "cpu"
+                        # active session count is derived from quota manager, not inc/dec
+                except Exception:
+                    pass
             except Exception:
                 with contextlib.suppress(Exception):
                     await self.stop(True)
@@ -900,6 +928,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 seen_running = True
                 continue
             if phase == "Failed" and seen_running:
+                try:
+                    pod_failure_total.labels(reason="git_clone_failed").inc()
+                    repo_clone_failed_total.inc()
+                except Exception:
+                    pass
+
                 raise RuntimeError(
                     "Server failed to start: the Git repository could not be cloned. "
                     "Verify the URL is correct and the repository is publicly accessible."
@@ -937,6 +971,17 @@ class RemoteLabKubeSpawner(KubeSpawner):
         if hasattr(self, "check_timer") and self.check_timer:
             with contextlib.suppress(Exception):
                 self.check_timer.cancel()
+
+        try:
+            start_ts = getattr(self, "_spawn_start_timestamp", None)
+
+            if start_ts:
+                runtime_minutes = max(0, (time.time() - start_ts) / 60.0)
+                session_runtime_minutes.observe(runtime_minutes)
+
+            # active session metric is derived from quota manager state
+        except Exception:
+            pass
 
         return await super().stop(now=now)
 

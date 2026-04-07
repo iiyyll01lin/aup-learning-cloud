@@ -213,7 +213,6 @@ hub:
     allowedIngressPorts: []
   allowNamedServers: false
   namedServerLimitPerUser:
-  authenticatePrometheus:
   redirectToServer:
   shutdownOnLogout:
   templatePaths: []

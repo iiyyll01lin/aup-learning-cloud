@@ -119,7 +119,6 @@ for trait, cfg_key in (
     ("base_url", None),
     ("allow_named_servers", None),
     ("named_server_limit_per_user", None),
-    ("authenticate_prometheus", None),
     ("redirect_to_server", None),
     ("shutdown_on_logout", None),
     ("template_vars", None),
@@ -136,6 +135,13 @@ for trait, cfg_key in (
             c.JupyterHub.template_vars.update(value)
     else:
         z2jh.set_config_if_not_none(c.JupyterHub, trait, "hub." + cfg_key)
+
+# Optional Prometheus metrics access
+metrics_enabled = z2jh.get_config("monitoring.hubMetrics.enabled", False)
+allow_unauthenticated_metrics = z2jh.get_config("monitoring.hubMetrics.allowUnauthenticatedScrape", True)
+
+if metrics_enabled and allow_unauthenticated_metrics:
+    c.JupyterHub.authenticate_prometheus = False
 
 # Hub bind and connect URLs
 hub_container_port = 8081

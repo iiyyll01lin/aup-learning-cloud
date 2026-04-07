@@ -4,3 +4,4 @@ jupyterhub-firstuseauthenticator
 pydantic
 pyyaml
 dulwich
+prometheus-client

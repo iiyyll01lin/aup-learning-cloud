@@ -358,6 +358,30 @@ hub:
     KubeSpawner:
       image_pull_policy: IfNotPresent
 
+monitoring:
+  enabled: false
+  namespace: monitoring
+  releaseLabel: monitoring
+
+  hubMetrics:
+    enabled: false
+    # Disable JupyterHub read:metrics scope requirement so in-cluster
+    # Prometheus can scrape /hub/metrics without authentication.
+    allowUnauthenticatedScrape: true
+    serviceAnnotations:
+      enabled: true
+
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+
+  grafana:
+    dashboard:
+      enabled: false
+
+  prometheusRule:
+    enabled: false
+
 singleuser:
   storage:
     dynamic:

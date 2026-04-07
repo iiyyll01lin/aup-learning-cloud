@@ -30,5 +30,8 @@
     "globals": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13"
   }
 }

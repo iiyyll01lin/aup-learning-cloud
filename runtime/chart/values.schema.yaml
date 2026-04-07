@@ -1275,9 +1275,6 @@ properties:
         patternProperties: *labels-and-annotations-patternProperties
         description: |
           K8s annotations for the hub pod.
-      authenticatePrometheus:
-        type: [boolean, "null"]
-        description: *jupyterhub-native-config-description
       concurrentSpawnLimit:
         type: [integer, "null"]
         description: *jupyterhub-native-config-description
@@ -2092,6 +2089,65 @@ properties:
           containerSecurityContext: *containerSecurityContext-spec
           image: *image-spec
           resources: *resources-spec
+
+  monitoring:
+    type: object
+    additionalProperties: false
+    properties:
+      enabled:
+        type: boolean
+        default: false
+      namespace:
+        type: string
+        default: monitoring
+      releaseLabel:
+        type: string
+        default: monitoring
+      hubMetrics:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          allowUnauthenticatedScrape:
+            type: boolean
+            default: true
+          serviceAnnotations:
+            type: object
+            additionalProperties: false
+            properties:
+              enabled:
+                type: boolean
+                default: true
+      serviceMonitor:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          interval:
+            type: string
+            default: 15s
+      grafana:
+        type: object
+        additionalProperties: false
+        properties:
+          dashboard:
+            type: object
+            additionalProperties: false
+            properties:
+              enabled:
+                type: boolean
+                default: false
+      prometheusRule:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
 
   singleuser:
     type: object
