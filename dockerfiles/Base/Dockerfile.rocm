@@ -40,6 +40,9 @@ ARG NB_GID=100
 # Use ROCM_TARBALL_URL / PYTORCH_INDEX_URL to override for edge cases.
 ARG GPU_TARGET=gfx1151
 ARG ROCM_VERSION=7.11.0
+ARG PYTORCH_VERSION=2.9.1
+ARG TORCHVISION_VERSION=0.24.1
+ARG TORCHAUDIO_VERSION=2.9.1
 # PyTorch wheel target — may differ from GPU_TARGET (e.g. gfx110x → gfx110X-all)
 # See https://repo.amd.com/rocm/whl/ for available targets
 ARG PYTORCH_WHL_TARGET=
@@ -107,9 +110,12 @@ RUN apt-get update && \
 # Install ROCm PyTorch
 RUN WHL_TARGET="${PYTORCH_WHL_TARGET:-${GPU_TARGET}}" && \
     INDEX_URL="${PYTORCH_INDEX_URL:-https://repo.amd.com/rocm/whl/${WHL_TARGET}/}" && \
+    TORCH_SUFFIX="+rocm${ROCM_VERSION}" && \
     python3 -m pip install --no-cache-dir \
     --index-url "${INDEX_URL}" \
-    torch torchvision torchaudio && \
+    "torch==${PYTORCH_VERSION}${TORCH_SUFFIX}" \
+    "torchvision==${TORCHVISION_VERSION}${TORCH_SUFFIX}" \
+    "torchaudio==${TORCHAUDIO_VERSION}${TORCH_SUFFIX}" && \
     SDK_INC=$(python3 -c "import _rocm_sdk_core, os; print(os.path.join(os.path.dirname(_rocm_sdk_core.__file__), 'include'))" 2>/dev/null) && \
     if [ -n "$SDK_INC" ] && [ ! -e /opt/rocm/include/hip ]; then \
         ln -s "${SDK_INC}/hip" /opt/rocm/include/hip; \
