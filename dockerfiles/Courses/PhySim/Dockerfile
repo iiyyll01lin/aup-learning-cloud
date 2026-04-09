@@ -45,7 +45,7 @@ RUN pip3 install --no-cache-dir \
     loguru \
     omegaconf \
     gstaichi \
-    genesis-world
+    "genesis-world==0.4.5"
 
 # Copy related rocm notebooks into the docker
 RUN mkdir -p /opt/workspace/PhySim
