@@ -420,7 +420,10 @@ function install_k3s_single_node() {
 
         wget https://get.k3s.io -O /tmp/get-k3s.sh
         verify_sha256 /tmp/get-k3s.sh "$K3S_INSTALLER_SHA256"
-        sudo K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="${k3s_exec}" sh /tmp/get-k3s.sh
+        sudo INSTALL_K3S_VERSION="${K3S_VERSION}" \
+            K3S_KUBECONFIG_MODE="644" \
+            INSTALL_K3S_EXEC="${k3s_exec}" \
+            sh /tmp/get-k3s.sh
         rm -f /tmp/get-k3s.sh
     fi
 
