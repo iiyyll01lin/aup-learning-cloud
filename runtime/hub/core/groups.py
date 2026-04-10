@@ -41,7 +41,7 @@ GITHUB_TEAM_SOURCE = "github-team"
 SYSTEM_SOURCE = "system"
 
 
-async def fetch_github_teams(access_token: str, org_name: str) -> list[str]:
+async def fetch_github_teams(access_token: str, org_name: str) -> list[str] | None:
     """Fetch the user's GitHub team slugs for the given organization.
 
     Args:
@@ -49,7 +49,8 @@ async def fetch_github_teams(access_token: str, org_name: str) -> list[str]:
         org_name: GitHub organization name to filter teams by.
 
     Returns:
-        List of team slugs the user belongs to in the organization.
+        List of team slugs the user belongs to in the organization, or ``None``
+        if the GitHub API request failed and membership is unknown.
     """
     headers = {
         "Authorization": f"token {access_token}",
@@ -69,15 +70,17 @@ async def fetch_github_teams(access_token: str, org_name: str) -> list[str]:
                         teams.append(team["slug"])
             else:
                 log.warning("GitHub API returned status %d when fetching teams", resp.status)
+                return None
     except Exception as e:
         log.warning("Error fetching GitHub teams: %s", e)
+        return None
 
     return teams
 
 
 def sync_user_github_teams(
     user: JupyterHubUser,
-    team_slugs: list[str],
+    team_slugs: list[str] | None,
     valid_mapping_keys: set[str],
     db: Session,
 ) -> None:
@@ -94,6 +97,10 @@ def sync_user_github_teams(
         valid_mapping_keys: Set of group names that have resource mappings in config.
         db: JupyterHub database session (``self.db`` from a handler or hook).
     """
+    if team_slugs is None:
+        log.warning("Skipping github-team sync for user '%s' because team membership could not be fetched", user.name)
+        return
+
     relevant_teams = set(team_slugs) & valid_mapping_keys
     assert user.orm_user is not None  # populated by JupyterHub on init
 
