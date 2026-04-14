@@ -47,7 +47,7 @@ A progressive series of 14 hands-on labs covering the full stack of Large Langua
 
 - **Focus**: Converting raw text into position-aware numerical representations
 - **Key Learning**: HuggingFace tokenizers (encode/decode/batch), `nn.Embedding` lookup, sinusoidal positional encoding, Rotary Position Embedding (RoPE), tensor reshape operations (`view`, `transpose`, `permute`, `gather`)
-- **Implementation**: Tokenizer exploration, embedding visualization, RoPE implementation with distance-decay verification
+- **Implementation**: Tokenizer exploration, embedding visualization, RoPE implementation with illustrative position-dependent behavior checks
 
 ### **LLM05: Normalization and FFN**
 
@@ -58,19 +58,19 @@ A progressive series of 14 hands-on labs covering the full stack of Large Langua
 ### **LLM06: Attention Mechanisms**
 
 - **Focus**: The core innovation behind transformers
-- **Key Learning**: Q/K/V projections, scaled dot-product attention (softmax-weighted aggregation), causal masking, padding masking, Multi-Head Attention (MHA), Grouped Query Attention (GQA), and how MHA/GQA/MQA relate in modern LLMs
-- **Implementation**: Attention from scratch, attention visualization, GQA implementation, mapping to LLaMA/Mistral/GPT architectures
+- **Key Learning**: Q/K/V projections, scaled dot-product attention (softmax-weighted aggregation), causal masking, padding masking, Multi-Head Attention (MHA), Grouped Query Attention (GQA), and how MHA, GQA, and MQA relate in modern LLMs
+- **Implementation**: Attention from scratch, attention visualization, GQA implementation, and connections to LLaMA-, Mistral-, and GPT-style architectures
 
 ### **LLM07: FlashAttention**
 
 - **Focus**: GPU-efficient attention via memory hierarchy optimization
-- **Key Learning**: GPU memory hierarchy (registers, SRAM/shared memory, L2, HBM), tiling for MatMul, online softmax (numerically stable incremental computation), FlashAttention V1 & V2 IO complexity analysis
-- **Implementation**: Tiled MatMul demonstration, online softmax implementation, benchmarking standard attention vs. `scaled_dot_product_attention`
+- **Key Learning**: GPU memory hierarchy (registers, SRAM/shared memory, L2, HBM), tiling for matrix multiplication, online softmax (numerically stable incremental computation), FlashAttention V1 & V2 IO complexity analysis
+- **Implementation**: Tiled matrix multiplication demonstration, online softmax implementation, benchmarking standard attention vs. `scaled_dot_product_attention`
 
 ### **LLM08: Mixture of Experts & Numerical Precision**
 
 - **Focus**: Sparse architectures and floating-point representations
-- **Key Learning**: MoE architecture (expert networks, Top-K gating, sparse activation, load balancing), floating-point formats (FP32, FP16, BF16, FP8), INT8/INT4 quantization and its impact on accuracy
+- **Key Learning**: MoE architecture (expert networks, Top-K gating, sparse activation, load balancing), floating-point formats (FP32, FP16, BF16, FP8), and INT8/INT4 quantization with their accuracy trade-offs
 - **Implementation**: MoE layer with Top-K gating from scratch, format comparison, basic quantization implementation
 
 ### **LLM09: LoRA Fine-Tuning**
@@ -119,8 +119,8 @@ The labs are organized progressively, building from foundational concepts to a c
 
 **Efficiency & Adaptation (LLM07–LLM09)**: FlashAttention (GPU memory hierarchy and IO-aware attention), Mixture of Experts and numerical precision (sparse scaling, quantization), and LoRA (parameter-efficient fine-tuning). Covers the key techniques for making LLMs practical at scale.
 
-**Training & Data (LLM10–LLM11)**: Data processing pipeline (tokenization, dataset preprocessing, model packaging) and the **model training pipeline** (collate functions, loss functions, optimizers, hand-written loops, HuggingFace Trainer, LLaMA Factory)—see **LLM11: Model Training Pipeline**.
+**Training & Data (LLM10–LLM11)**: Data processing pipeline (tokenization, dataset preprocessing, model packaging) and the model training pipeline (collate functions, loss functions, optimizers, hand-written loops, HuggingFace Trainer, LLaMA Factory).
 
 **Inference & Serving (LLM12–LLM13)**: Decoding strategies and KV-Cache optimization for efficient generation, followed by sparse attention patterns and PagedAttention for long-context and high-throughput serving.
 
-**Capstone (LLM14)**: Build a Tiny LLaMA from scratch — putting normalization, positional encoding, attention, FFN, training, and generation together into one self-contained, working model.
+**Capstone (LLM14)**: Build a Tiny LLaMA from scratch by putting normalization, positional encoding, attention, FFN, training, and generation together into one self-contained, working model.
