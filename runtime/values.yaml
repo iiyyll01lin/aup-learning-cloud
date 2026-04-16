@@ -391,7 +391,7 @@ singleuser:
       fsGroup: 100
       supplementalGroups:
         - 993  # render group for ROCm GPU access
-  
+
   storage:
     dynamic:
       storageClass: local-path
