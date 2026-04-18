@@ -805,7 +805,7 @@ class UserQuotaInfoHandler(APIHandler):
             return
 
         quota_manager = get_quota_manager()
-        balance = quota_manager.get_balance(username)
+        balance = quota_manager.ensure_user_quota(username, _handler_config["default_quota"])
         has_unlimited = quota_manager.is_unlimited_in_db(username)
 
         self.set_header("Content-Type", "application/json")
