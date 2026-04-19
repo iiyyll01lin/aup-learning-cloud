@@ -134,6 +134,10 @@ custom:
       nodeSelector:
         node-type: phx
       env:
+        # Phoenix hw (gfx1100/1101/1102/1103) shares a single gfx110x ROCm
+        # build — we do not ship dedicated images for gfx1102/gfx1103 — so
+        # force every Phoenix GPU to report as gfx1100 at runtime so it
+        # accepts the shared kernels.
         HSA_OVERRIDE_GFX_VERSION: "11.0.0"
       quotaRate: 2
     strix:
