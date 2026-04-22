@@ -132,7 +132,7 @@ custom:
       displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
       description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
       nodeSelector:
-        node-type: phx
+        amd.com/gpu.product-name: "AMD_Radeon_780M_Graphics"
       env:
         # Phoenix hw (gfx1100/1101/1102/1103) shares a single gfx110x ROCm
         # build — we do not ship dedicated images for gfx1102/gfx1103 — so
@@ -144,30 +144,33 @@ custom:
       displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
       description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
       nodeSelector:
-        node-type: strix
+        amd.com/gpu.product-name: "AMD_Radeon_890M_Graphics"
       env: {}
       quotaRate: 2
     strix-halo:
       displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
       description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
       nodeSelector:
-        node-type: strix-halo
+        amd.com/gpu.product-name: "AMD_Radeon_8060S_Graphics"
       env: {}
       quotaRate: 3
-    dgpu:
-      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
+    9070xt:
+      displayName: "AMD Radeon™ RX 9070 XT (Desktop GPU)"
       description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
+      # ROCm labeller publishes the marketing name with spaces → '_', so the
+      # expected value on a real node is AMD_Radeon_RX_9070_XT. If your fleet
+      # uses the older AMD_Radeon_9070XT normalisation, change it here.
       nodeSelector:
-        node-type: dgpu
+        amd.com/gpu.product-name: "AMD_Radeon_RX_9070_XT"
       env: {}
       quotaRate: 4
-    strix-npu:
-      displayName: "AMD XDNA2 (Strix Point NPU)"
-      description: "AMD XDNA2 NPU with AI acceleration"
+    r9700:
+      displayName: "AMD Radeon™ AI Pro R9700 (Workstation GPU)"
+      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 32GB GDDR6"
       nodeSelector:
-        type: strix
+        amd.com/gpu.product-name: "AMD_Radeon_AI_PRO_R9700"
       env: {}
-      quotaRate: 1
+      quotaRate: 4
 
   # ============================================================================
   # Course Resources Configuration

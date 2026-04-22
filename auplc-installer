@@ -34,6 +34,10 @@ K9S_VERSION="v0.32.7"
 K9S_LINUX_AMD64_DEB_SHA256="3f12b34557d9ed9eada465b6fad57dbe9367786f68cfd4604a6771a9f08446b8"
 ROCM_DEVICE_PLUGIN_COMMIT="dea1db13f05159e64d8114bca4c31f48c3cfcac6"
 ROCM_DEVICE_PLUGIN_SHA256="b751e467feecf6118bed1de8ba80b9abff01c1f52a6b0b8f31aca3609e6e9dbd"
+# Labeller manifest lives in the same repo/commit; it publishes node labels
+# such as amd.com/gpu.product-name so values.yaml can target GPUs directly
+# via nodeSelector without manually labelling each node.
+ROCM_LABELLER_SHA256="c3e456967efdf14bcfeb97d8f87ca75a402cc6c7c8c6201a320efdd0370fa7aa"
 
 K3S_IMAGES_DIR="/var/lib/rancher/k3s/agent/images"
 K3S_REGISTRIES_FILE="/etc/rancher/k3s/registries.yaml"
@@ -80,10 +84,29 @@ BUILD_ONLY_IMAGES=(
     "quay.io/jupyter/base-notebook"
 )
 
-# GPU configuration globals (set by detect_and_configure_gpu)
+# GPU configuration globals.
+#
+# The installer supports machines with multiple AMD GPUs — potentially of
+# different SKUs (e.g. an RX 9070 XT + a Radeon AI PRO R9700 in the same
+# workstation). Detection populates parallel arrays, one entry per distinct
+# SKU on the host; `generate_values_overlay` iterates them to emit multi-SKU
+# acceleratorKeys and accelerator stanzas.
+#
+# The scalar *_primary globals are kept for compatibility with offline-bundle
+# manifests and image tagging; they always mirror index 0 of the arrays.
+GPU_SKU_KEYS=()            # e.g. ("9070xt" "r9700")
+GPU_SKU_PRODUCT_NAMES=()   # e.g. ("AMD_Radeon_RX_9070_XT" "AMD_Radeon_AI_PRO_R9700")
+GPU_SKU_TARGETS=()         # e.g. ("gfx120x" "gfx120x")
+GPU_SKU_ENVS=()            # e.g. ("" "")
+GPU_SKU_QUOTA_RATES=()     # e.g. ("4" "4")
+GPU_SKU_DISPLAY_NAMES=()   # e.g. ("AMD Radeon RX 9070 XT" "AMD Radeon AI PRO R9700")
+
+# Primary-SKU scalars (= first array entry). Used for image tagging, CLI
+# messages, and offline-bundle manifest.json.
 ACCEL_KEY=""
 GPU_TARGET=""
 ACCEL_ENV=""
+GPU_PRODUCT_NAME=""
 
 # ============================================================
 # Offline Bundle Detection
@@ -125,6 +148,73 @@ function detect_offline_bundle() {
 # ============================================================
 # GPU Detection & Configuration
 # ============================================================
+
+# Normalise a marketing name the same way the ROCm node-labeller does, so the
+# installer can emit a nodeSelector that matches the label the labeller will
+# publish once it is running. The labeller replaces whitespace with '_' and
+# strips characters that are not valid in a Kubernetes label value.
+# See: https://github.com/ROCm/k8s-device-plugin/tree/master/cmd/k8s-node-labeller
+function normalise_product_name() {
+    local raw="$1"
+    local name
+    name=$(printf '%s' "${raw}" | tr -s '[:space:]' '_' | sed 's/[^A-Za-z0-9._-]//g')
+    name="${name##_}"
+    name="${name%%_}"
+    printf '%s' "${name}"
+}
+
+# Detect all distinct GPU marketing / product names on the host. Tries (in
+# order, combining results):
+#   1. rocminfo — filtered to "Device Type: GPU" agents so AMD CPUs (e.g.
+#      Threadripper PRO 9985WX) don't bleed into the list. Requires the
+#      optional `rocminfo` tool.
+#   2. /sys/class/drm/card*/device/product_name — amdgpu driver sysfs
+#      (available on Navi 2x+). Works WITHOUT ROCm userspace.
+# Prints one normalised (labeller-style) product name per line, de-duplicated.
+# Returns nothing (non-fatal) when no product names can be determined; callers
+# fall back to gfx-family resolution via detect_gpu().
+function detect_gpu_product_names() {
+    {
+        if command -v rocminfo &>/dev/null; then
+            # rocminfo lists "Marketing Name:" BEFORE "Device Type:" for each
+            # HSA agent. Accumulate marketing name, commit it when we see a
+            # GPU device type, discard for CPU agents.
+            rocminfo 2>/dev/null | awk '
+                /^[[:space:]]*Marketing Name:[[:space:]]*/ {
+                    sub(/^[[:space:]]*Marketing Name:[[:space:]]*/, "");
+                    marketing=$0; next
+                }
+                /^[[:space:]]*Device Type:[[:space:]]*/ {
+                    sub(/^[[:space:]]*Device Type:[[:space:]]*/, "");
+                    devtype=$0;
+                    if (devtype == "GPU" && length(marketing) > 0) {
+                        print marketing
+                    }
+                    marketing=""; devtype=""
+                }
+            '
+        fi
+
+        # amdgpu driver vbios_info sysfs — no ROCm dependency. One file per
+        # DRM card; iGPU nodes typically don't expose this attribute so this
+        # path primarily covers dGPUs (Navi 2x+).
+        local f
+        for f in /sys/class/drm/card*/device/product_name; do
+            [[ -f "${f}" ]] || continue
+            cat "${f}" 2>/dev/null || true
+        done
+    } | while IFS= read -r raw; do
+        [[ -z "${raw}" ]] && continue
+        # normalise_product_name prints without a trailing newline; add one
+        # so awk below sees distinct records for each detected product.
+        printf '%s\n' "$(normalise_product_name "${raw}")"
+    done | awk 'NF && !seen[$0]++'
+}
+
+# Backward-compatible singular helper: return the first detected product name.
+function detect_gpu_product_name() {
+    detect_gpu_product_names | head -n 1
+}
 
 function detect_gpu() {
     if command -v rocminfo &>/dev/null; then
@@ -185,37 +275,280 @@ function resolve_gpu_config() {
             ACCEL_ENV=""
             ;;
         gfx1201|gfx1200|rdna4|dgpu)
-            ACCEL_KEY="dgpu"
+            # Generic RDNA4 fallback used only when product-name detection
+            # fails. Product-name-aware resolution refines this to a specific
+            # SKU (9070xt / r9700 / 9600gre / ...) in detect_and_configure_gpu.
+            ACCEL_KEY="r9700"
+            GPU_TARGET="gfx120x"
+            ACCEL_ENV=""
+            ;;
+        9070xt)
+            ACCEL_KEY="9070xt"
+            GPU_TARGET="gfx120x"
+            ACCEL_ENV=""
+            ;;
+        r9700)
+            ACCEL_KEY="r9700"
+            GPU_TARGET="gfx120x"
+            ACCEL_ENV=""
+            ;;
+        9600gre)
+            ACCEL_KEY="9600gre"
             GPU_TARGET="gfx120x"
             ACCEL_ENV=""
             ;;
         *)
             echo "Error: Unsupported GPU type: $input" >&2
-            echo "Supported: phx (gfx1100-1103), strix (gfx1150), strix-halo (gfx1151), rdna4 (gfx1201)" >&2
+            echo "Supported: phx (gfx1100-1103), strix (gfx1150), strix-halo (gfx1151), RDNA4 SKUs (9070xt | r9700 | 9600gre | dgpu fallback)" >&2
             exit 1
             ;;
     esac
 }
 
-function detect_and_configure_gpu() {
-    if [[ -n "${ACCEL_KEY}" ]]; then return 0; fi
+# Product-name → (accel_key|gpu_target|accel_env|quota_rate|display_name).
+# Keep the accel_key column in sync with runtime/values.yaml
+# custom.accelerators.*. Rows that are curated in values.yaml do not need
+# the display name; rows that are NOT curated (e.g. 9600gre) use
+# display_name when the installer injects a minimal stanza.
+function sku_for_product_name() {
+    case "$1" in
+        AMD_Radeon_780M_Graphics)
+            echo "phx|gfx110x|11.0.0|2|AMD Radeon 780M (Phoenix Point iGPU)" ;;
+        AMD_Radeon_890M_Graphics)
+            echo "strix|gfx1150||2|AMD Radeon 890M (Strix Point iGPU)" ;;
+        AMD_Radeon_8060S_Graphics)
+            echo "strix-halo|gfx1151||3|AMD Radeon 8060S (Strix Halo iGPU)" ;;
+        AMD_Radeon_9070XT|AMD_Radeon_RX_9070_XT|AMD_Radeon_RX_9070XT)
+            echo "9070xt|gfx120x||4|AMD Radeon RX 9070 XT" ;;
+        AMD_Radeon_AI_PRO_R9700)
+            echo "r9700|gfx120x||4|AMD Radeon AI PRO R9700" ;;
+        AMD_Radeon_RX_9600_GRE|AMD_Radeon_9600_GRE|AMD_Radeon_RX_9600GRE)
+            echo "9600gre|gfx120x||4|AMD Radeon RX 9600 GRE" ;;
+        *)
+            echo "" ;;
+    esac
+}
 
-    local gpu_input=""
-    if [[ -n "${GPU_TYPE:-}" ]]; then
-        gpu_input="${GPU_TYPE}"
-        echo "Using GPU type override: ${GPU_TYPE}"
+# Accelerator keys already defined in runtime/values.yaml custom.accelerators.
+# When the resolved ACCEL_KEY is not in this list, generate_values_overlay
+# injects a minimal accelerator stanza so helm install succeeds without
+# requiring values.yaml edits (useful for ad-hoc SKUs like 9600gre).
+GPU_CURATED_SKU_KEYS=("phx" "strix" "strix-halo" "9070xt" "r9700")
+
+function is_curated_sku() {
+    local key="$1" k
+    for k in "${GPU_CURATED_SKU_KEYS[@]}"; do
+        [[ "$k" == "$key" ]] && return 0
+    done
+    return 1
+}
+
+# Reset all SKU arrays and primary scalars. Used when we re-populate the
+# SKU list from an authoritative source (e.g. labeller node labels).
+function reset_gpu_sku_state() {
+    GPU_SKU_KEYS=()
+    GPU_SKU_PRODUCT_NAMES=()
+    GPU_SKU_TARGETS=()
+    GPU_SKU_ENVS=()
+    GPU_SKU_QUOTA_RATES=()
+    GPU_SKU_DISPLAY_NAMES=()
+    ACCEL_KEY=""
+    GPU_TARGET=""
+    ACCEL_ENV=""
+    GPU_PRODUCT_NAME=""
+}
+
+# Append a SKU row to the detection arrays. A row is the "|"-separated string
+# returned by sku_for_product_name or synthesise_uncurated_sku_row:
+#   "<accel_key>|<gpu_target>|<accel_env>|<quota_rate>|<display_name>"
+# product_name is the labeller-normalised string to use in the generated
+# accelerator.nodeSelector (may be empty for gfx-family fallbacks).
+# Silently skips rows whose accel_key is already in the arrays.
+function append_sku_row() {
+    local row="$1" product_name="$2"
+    local key target env rate display
+    IFS='|' read -r key target env rate display <<<"${row}"
+    [[ -z "${key}" ]] && return 0
+
+    local k
+    for k in "${GPU_SKU_KEYS[@]}"; do
+        [[ "${k}" == "${key}" ]] && return 0
+    done
+
+    GPU_SKU_KEYS+=("${key}")
+    GPU_SKU_PRODUCT_NAMES+=("${product_name}")
+    GPU_SKU_TARGETS+=("${target}")
+    GPU_SKU_ENVS+=("${env}")
+    GPU_SKU_QUOTA_RATES+=("${rate:-4}")
+    GPU_SKU_DISPLAY_NAMES+=("${display}")
+
+    # First entry also drives the primary scalars.
+    if [[ -z "${ACCEL_KEY}" ]]; then
+        ACCEL_KEY="${key}"
+        GPU_TARGET="${target}"
+        ACCEL_ENV="${env}"
+        GPU_PRODUCT_NAME="${product_name}"
+    fi
+}
+
+# Synthesise a SKU row for a product not in sku_for_product_name. Safe
+# defaults: gfx120x image target, no HSA override, quotaRate 4 (dGPU-ish).
+# Users hitting this path should add their SKU to sku_for_product_name (and
+# ideally to runtime/values.yaml) for a first-class experience.
+function synthesise_uncurated_sku_row() {
+    local product="$1" key display
+    display="${product//_/ }"
+    key=$(printf '%s' "${product}" \
+        | tr '[:upper:]' '[:lower:]' \
+        | sed 's/[^a-z0-9-]/-/g; s/-\{2,\}/-/g; s/^-*//; s/-*$//')
+    [[ -z "${key}" ]] && key="amd-gpu"
+    echo "${key}|gfx120x||4|${display:-AMD GPU}"
+}
+
+# Given a product name, append its SKU row (curated or synthesised).
+function append_product_name() {
+    local product="$1"
+    [[ -z "${product}" ]] && return 0
+
+    local row
+    row=$(sku_for_product_name "${product}")
+    if [[ -n "${row}" ]]; then
+        append_sku_row "${row}" "${product}"
     else
-        gpu_input=$(detect_gpu 2>/dev/null) || true
-        if [[ -z "$gpu_input" ]]; then
-            gpu_input="strix-halo"
-            echo "GPU not detected, defaulting to strix-halo (gfx1151)"
-        else
-            echo "Detected GPU: ${gpu_input}"
-        fi
+        row=$(synthesise_uncurated_sku_row "${product}")
+        append_sku_row "${row}" "${product}"
+    fi
+}
+
+function detect_and_configure_gpu() {
+    # Re-entrant guard: if the arrays are already populated (e.g. by offline
+    # bundle detection or a prior call in the same process), do nothing.
+    if [[ ${#GPU_SKU_KEYS[@]} -gt 0 ]]; then return 0; fi
+
+    # Honour manifest-pinned scalars from offline bundles: the bundle was
+    # built for a specific gfx family and GHCR image tag, so we must preserve
+    # those even when host-side detection disagrees. (Host arrays are still
+    # populated below so multi-SKU acceleratorKeys work at install time.)
+    local pinned_key="${ACCEL_KEY}" pinned_target="${GPU_TARGET}" pinned_env="${ACCEL_ENV}"
+    ACCEL_KEY="" GPU_TARGET="" ACCEL_ENV="" GPU_PRODUCT_NAME=""
+
+    # Primary path: enumerate all AMD GPUs by product name (rocminfo GPU
+    # agents + amdgpu sysfs), then resolve each into a SKU row.
+    local names
+    names=$(detect_gpu_product_names)
+
+    if [[ -n "${names}" ]]; then
+        echo "Detected GPU product name(s) from host:"
+        local name
+        while IFS= read -r name; do
+            [[ -z "${name}" ]] && continue
+            echo "  - ${name}"
+            append_product_name "${name}"
+        done <<<"${names}"
     fi
 
-    resolve_gpu_config "$gpu_input"
-    echo "  accelerator=${ACCEL_KEY}, GPU_TARGET=${GPU_TARGET}${ACCEL_ENV:+, HSA_OVERRIDE=${ACCEL_ENV}}"
+    # Fallback: gfx-family resolution. Also used when product-name detection
+    # succeeded but produced zero usable entries (all blank names etc.).
+    if [[ ${#GPU_SKU_KEYS[@]} -eq 0 ]]; then
+        local gpu_input=""
+        if [[ -n "${GPU_TYPE:-}" ]]; then
+            gpu_input="${GPU_TYPE}"
+            echo "Using GPU type override: ${GPU_TYPE}"
+        else
+            gpu_input=$(detect_gpu 2>/dev/null) || true
+            if [[ -z "${gpu_input}" ]]; then
+                gpu_input="strix-halo"
+                echo "GPU not detected, defaulting to strix-halo (gfx1151)"
+            else
+                echo "Detected GPU: ${gpu_input}"
+            fi
+        fi
+        resolve_gpu_config "${gpu_input}"
+        # Push the gfx-resolved scalars into the array model.
+        GPU_SKU_KEYS+=("${ACCEL_KEY}")
+        GPU_SKU_PRODUCT_NAMES+=("")
+        GPU_SKU_TARGETS+=("${GPU_TARGET}")
+        GPU_SKU_ENVS+=("${ACCEL_ENV}")
+        GPU_SKU_QUOTA_RATES+=("4")
+        GPU_SKU_DISPLAY_NAMES+=("")
+    fi
+
+    # Restore manifest-pinned primary scalars if they diverged from host.
+    if [[ -n "${pinned_target}" && "${pinned_target}" != "${GPU_TARGET}" ]]; then
+        echo "Note: offline bundle was packed for ${pinned_key}/${pinned_target}; host detected primary=${ACCEL_KEY}/${GPU_TARGET}."
+        echo "      Keeping bundle image tag (${pinned_target}); acceleratorKeys reflect host SKUs."
+        ACCEL_KEY="${pinned_key}"
+        GPU_TARGET="${pinned_target}"
+        ACCEL_ENV="${pinned_env}"
+    fi
+
+    echo "  primary accelerator=${ACCEL_KEY}, GPU_TARGET=${GPU_TARGET}${ACCEL_ENV:+, HSA_OVERRIDE=${ACCEL_ENV}}"
+    if [[ ${#GPU_SKU_KEYS[@]} -gt 1 ]]; then
+        echo "  additional SKUs: ${GPU_SKU_KEYS[*]:1}"
+    fi
+}
+
+# Read all distinct product names from node labels published by the ROCm
+# labeller, one per line. Prefers beta.amd.com/gpu.product-name.<NAME>=count
+# labels (which enumerate every distinct SKU on a node); falls back to the
+# scalar amd.com/gpu.product-name label for single-GPU hosts.
+function read_gpu_product_names_from_node_labels() {
+    command -v kubectl &>/dev/null || return 0
+    kubectl get nodes -o name &>/dev/null || return 0
+
+    # beta.amd.com/gpu.product-name.<PRODUCT>=<count>
+    local from_beta
+    from_beta=$(kubectl get nodes -o yaml 2>/dev/null \
+        | grep -oE 'beta\.amd\.com/gpu\.product-name\.[A-Za-z0-9_.-]+' \
+        | sed 's|^beta\.amd\.com/gpu\.product-name\.||' \
+        | awk 'NF && !seen[$0]++')
+    if [[ -n "${from_beta}" ]]; then
+        printf '%s\n' "${from_beta}"
+        return 0
+    fi
+
+    # Fallback: scalar amd.com/gpu.product-name (single-product nodes).
+    kubectl get nodes \
+        -o jsonpath='{range .items[*]}{.metadata.labels.amd\.com/gpu\.product-name}{"\n"}{end}' 2>/dev/null \
+        | awk 'NF && !seen[$0]++'
+}
+
+# After the ROCm labeller is running on the cluster, replace the SKU arrays
+# with the authoritative list of product names published on node labels.
+# Safe to call from any code path that holds a working kubectl; no-op when
+# kubectl or the labels are unavailable.
+function refine_gpu_config_from_node_labels() {
+    local names
+    names=$(read_gpu_product_names_from_node_labels)
+    [[ -z "${names}" ]] && return 0
+
+    # Diff against current arrays for a helpful log line.
+    local prev_keys="${GPU_SKU_KEYS[*]}"
+    local pinned_target="${GPU_TARGET}" pinned_env="${ACCEL_ENV}"
+
+    reset_gpu_sku_state
+    local name
+    while IFS= read -r name; do
+        [[ -z "${name}" ]] && continue
+        append_product_name "${name}"
+    done <<<"${names}"
+
+    echo "Refreshed GPU SKUs from node labels (ROCm labeller is authoritative):"
+    echo "  product names    : ${names//$'\n'/, }"
+    echo "  resolved SKU keys: ${GPU_SKU_KEYS[*]}"
+
+    # If the primary image target from host/bundle was explicitly pinned and
+    # the labeller refinement picks a different one, warn but respect the
+    # labeller (images can be pulled per-accelerator via the overlay later).
+    if [[ -n "${pinned_target}" && "${pinned_target}" != "${GPU_TARGET}" ]]; then
+        echo "  note: image target was ${pinned_target}, labeller-refined primary is ${GPU_TARGET}"
+    fi
+    # Preserve HSA override if detection erased it (e.g. phx with no rocminfo).
+    [[ -z "${ACCEL_ENV}" && -n "${pinned_env}" ]] && ACCEL_ENV="${pinned_env}"
+
+    if [[ "${prev_keys}" != "${GPU_SKU_KEYS[*]}" ]]; then
+        echo "  SKU list changed: [${prev_keys}] → [${GPU_SKU_KEYS[*]}]"
+    fi
 }
 
 # ============================================================
@@ -229,33 +562,145 @@ function generate_values_overlay() {
     fi
     echo "Generating values overlay: ${overlay_path}"
 
-    local tag="${IMAGE_TAG}-${GPU_TARGET}"
+    # Safety net: callers that didn't call detect_and_configure_gpu may arrive
+    # here with empty arrays. Synthesise a single-entry array from the scalars.
+    if [[ ${#GPU_SKU_KEYS[@]} -eq 0 && -n "${ACCEL_KEY}" ]]; then
+        GPU_SKU_KEYS+=("${ACCEL_KEY}")
+        GPU_SKU_PRODUCT_NAMES+=("${GPU_PRODUCT_NAME}")
+        GPU_SKU_TARGETS+=("${GPU_TARGET}")
+        GPU_SKU_ENVS+=("${ACCEL_ENV}")
+        GPU_SKU_QUOTA_RATES+=("4")
+        GPU_SKU_DISPLAY_NAMES+=("")
+    fi
+
+    local primary_tag="${IMAGE_TAG}-${GPU_TARGET}"
+
+    # All SKUs share the same gfx target? (Common for 9070 XT + R9700 on one
+    # box: both gfx120x → single image tag, just multiple acceleratorKeys.)
+    local homogeneous_target=1 t
+    for t in "${GPU_SKU_TARGETS[@]}"; do
+        [[ "${t}" != "${GPU_TARGET}" ]] && { homogeneous_target=0; break; }
+    done
+
+    # Image lookup table (resource name → local image basename) for
+    # acceleratorOverrides emission when SKUs straddle gfx families.
+    local -A _resource_image_base=(
+        [gpu]="auplc-base"
+        [Course-CV]="auplc-cv"
+        [Course-DL]="auplc-dl"
+        [Course-LLM]="auplc-llm"
+        [Course-PhySim]="auplc-physim"
+    )
 
     {
-        echo "# Auto-generated by auplc-installer (GPU: ${ACCEL_KEY}, target: ${GPU_TARGET})"
+        echo "# Auto-generated by auplc-installer."
+        echo "# Detected SKU keys : ${GPU_SKU_KEYS[*]}"
+        local product_label="" p
+        for p in "${GPU_SKU_PRODUCT_NAMES[@]}"; do
+            [[ -n "${product_label}" ]] && product_label+=", "
+            product_label+="${p:-<unknown>}"
+        done
+        echo "# Product names    : ${product_label}"
+        echo "# Primary gfx tag  : ${GPU_TARGET}"
+        (( homogeneous_target )) || echo "# Mixed gfx targets: ${GPU_SKU_TARGETS[*]}"
         echo "# Regenerated on install/upgrade."
         echo "custom:"
 
-        if [[ -n "${ACCEL_ENV}" ]]; then
-            echo "  accelerators:"
-            echo "    ${ACCEL_KEY}:"
-            echo "      env:"
-            echo "        HSA_OVERRIDE_GFX_VERSION: \"${ACCEL_ENV}\""
-        fi
+        # Accelerators block: emit an override for each SKU that has something
+        # to say. Curated SKUs only get env/nodeSelector overrides when we
+        # actually need to pin them; uncurated SKUs get a full stanza so
+        # values.yaml doesn't need editing.
+        local any_accel_emitted=0 i
+        for i in "${!GPU_SKU_KEYS[@]}"; do
+            local k="${GPU_SKU_KEYS[$i]}"
+            local product="${GPU_SKU_PRODUCT_NAMES[$i]}"
+            local env="${GPU_SKU_ENVS[$i]}"
+            local rate="${GPU_SKU_QUOTA_RATES[$i]:-4}"
+            local display="${GPU_SKU_DISPLAY_NAMES[$i]}"
+            local target="${GPU_SKU_TARGETS[$i]}"
 
+            if is_curated_sku "${k}"; then
+                # Only emit an override when there's a non-trivial reason:
+                #   - product name was detected (pin nodeSelector to the real SKU)
+                #   - HSA_OVERRIDE_GFX_VERSION is applicable (phx family)
+                if [[ -z "${product}" && -z "${env}" ]]; then
+                    continue
+                fi
+                if (( ! any_accel_emitted )); then
+                    echo "  accelerators:"
+                    any_accel_emitted=1
+                fi
+                echo "    ${k}:"
+                if [[ -n "${product}" ]]; then
+                    echo "      nodeSelector:"
+                    echo "        amd.com/gpu.product-name: \"${product}\""
+                fi
+                if [[ -n "${env}" ]]; then
+                    echo "      env:"
+                    echo "        HSA_OVERRIDE_GFX_VERSION: \"${env}\""
+                fi
+            else
+                if (( ! any_accel_emitted )); then
+                    echo "  accelerators:"
+                    any_accel_emitted=1
+                fi
+                local display_text="${display:-${product//_/ }}"
+                [[ -z "${display_text}" ]] && display_text="AMD GPU (${k})"
+                local selector_product="${product:-${k}}"
+                echo "    # SKU '${k}' is not curated in values.yaml; stanza injected by installer."
+                echo "    # For production / multi-node deployments, copy this block into values.yaml."
+                echo "    ${k}:"
+                echo "      displayName: \"${display_text}\""
+                echo "      description: \"Auto-detected (${target})\""
+                echo "      nodeSelector:"
+                echo "        amd.com/gpu.product-name: \"${selector_product}\""
+                if [[ -n "${env}" ]]; then
+                    echo "      env:"
+                    echo "        HSA_OVERRIDE_GFX_VERSION: \"${env}\""
+                else
+                    echo "      env: {}"
+                fi
+                echo "      quotaRate: ${rate}"
+            fi
+        done
+
+        # Resources block: single image tag (primary gfx target) + all detected
+        # keys in acceleratorKeys. If any SKU uses a different gfx target we
+        # emit per-accelerator image overrides in metadata.acceleratorOverrides.
         echo "  resources:"
         echo "    images:"
-        echo "      gpu: \"${IMAGE_REGISTRY}/auplc-base:${tag}\""
-        echo "      Course-CV: \"${IMAGE_REGISTRY}/auplc-cv:${tag}\""
-        echo "      Course-DL: \"${IMAGE_REGISTRY}/auplc-dl:${tag}\""
-        echo "      Course-LLM: \"${IMAGE_REGISTRY}/auplc-llm:${tag}\""
-        echo "      Course-PhySim: \"${IMAGE_REGISTRY}/auplc-physim:${tag}\""
+        echo "      gpu: \"${IMAGE_REGISTRY}/auplc-base:${primary_tag}\""
+        echo "      Course-CV: \"${IMAGE_REGISTRY}/auplc-cv:${primary_tag}\""
+        echo "      Course-DL: \"${IMAGE_REGISTRY}/auplc-dl:${primary_tag}\""
+        echo "      Course-LLM: \"${IMAGE_REGISTRY}/auplc-llm:${primary_tag}\""
+        echo "      Course-PhySim: \"${IMAGE_REGISTRY}/auplc-physim:${primary_tag}\""
         echo "    metadata:"
+        local resource
         for resource in gpu Course-CV Course-DL Course-LLM Course-PhySim; do
             echo "      ${resource}:"
             echo "        acceleratorKeys:"
-            echo "          - ${ACCEL_KEY}"
+            local k
+            for k in "${GPU_SKU_KEYS[@]}"; do
+                echo "          - ${k}"
+            done
+            if (( ! homogeneous_target )); then
+                local base_name="${_resource_image_base[$resource]}"
+                local wrote_overrides=0
+                for i in "${!GPU_SKU_KEYS[@]}"; do
+                    local sku_key="${GPU_SKU_KEYS[$i]}"
+                    local sku_target="${GPU_SKU_TARGETS[$i]}"
+                    if [[ "${sku_target}" != "${GPU_TARGET}" ]]; then
+                        if (( ! wrote_overrides )); then
+                            echo "        acceleratorOverrides:"
+                            wrote_overrides=1
+                        fi
+                        echo "          ${sku_key}:"
+                        echo "            image: \"${IMAGE_REGISTRY}/${base_name}:${IMAGE_TAG}-${sku_target}\""
+                    fi
+                done
+            fi
         done
+
         if [[ "${OFFLINE_MODE}" == "1" ]]; then
             echo "hub:"
             echo "  image:"
@@ -537,25 +982,56 @@ function deploy_rocm_gpu_device_plugin() {
 
     if kubectl get ds/amdgpu-device-plugin-daemonset --namespace=kube-system &> /dev/null; then
         echo "ROCm GPU device plugin already exists."
+    else
+        if [[ "${OFFLINE_MODE}" == "1" ]]; then
+            kubectl create -f "${BUNDLE_DIR}/manifests/k8s-ds-amdgpu-dp.yaml"
+            # Patch imagePullPolicy to avoid pulling from registry in air-gapped environments
+            kubectl patch ds amdgpu-device-plugin-daemonset -n kube-system --type=json \
+                -p '[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
+        else
+            wget "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/${ROCM_DEVICE_PLUGIN_COMMIT}/k8s-ds-amdgpu-dp.yaml" -O /tmp/k8s-ds-amdgpu-dp.yaml
+            verify_sha256 /tmp/k8s-ds-amdgpu-dp.yaml "$ROCM_DEVICE_PLUGIN_SHA256"
+            kubectl create -f /tmp/k8s-ds-amdgpu-dp.yaml
+            rm -f /tmp/k8s-ds-amdgpu-dp.yaml
+        fi
+
+        if ! kubectl wait --for=jsonpath='{.status.numberReady}'=1 --namespace=kube-system ds/amdgpu-device-plugin-daemonset --timeout=300s | grep "condition met"; then
+            exit 1
+        else
+            echo "Successfully deployed ROCm GPU device plugin."
+        fi
+    fi
+
+    deploy_rocm_gpu_node_labeller
+}
+
+# Deploy the ROCm node labeller DaemonSet. The labeller stamps each GPU node
+# with labels like amd.com/gpu.product-name, amd.com/gpu.family, etc., so
+# values.yaml nodeSelectors can target GPUs without manual `kubectl label`.
+function deploy_rocm_gpu_node_labeller() {
+    echo "Deploying ROCm GPU node labeller..."
+
+    if kubectl get ds/amdgpu-labeller-daemonset --namespace=kube-system &> /dev/null; then
+        echo "ROCm GPU node labeller already exists."
         return 0
     fi
 
     if [[ "${OFFLINE_MODE}" == "1" ]]; then
-        kubectl create -f "${BUNDLE_DIR}/manifests/k8s-ds-amdgpu-dp.yaml"
+        kubectl create -f "${BUNDLE_DIR}/manifests/k8s-ds-amdgpu-labeller.yaml"
         # Patch imagePullPolicy to avoid pulling from registry in air-gapped environments
-        kubectl patch ds amdgpu-device-plugin-daemonset -n kube-system --type=json \
+        kubectl patch ds amdgpu-labeller-daemonset -n kube-system --type=json \
             -p '[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
     else
-        wget "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/${ROCM_DEVICE_PLUGIN_COMMIT}/k8s-ds-amdgpu-dp.yaml" -O /tmp/k8s-ds-amdgpu-dp.yaml
-        verify_sha256 /tmp/k8s-ds-amdgpu-dp.yaml "$ROCM_DEVICE_PLUGIN_SHA256"
-        kubectl create -f /tmp/k8s-ds-amdgpu-dp.yaml
-        rm -f /tmp/k8s-ds-amdgpu-dp.yaml
+        wget "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/${ROCM_DEVICE_PLUGIN_COMMIT}/k8s-ds-amdgpu-labeller.yaml" -O /tmp/k8s-ds-amdgpu-labeller.yaml
+        verify_sha256 /tmp/k8s-ds-amdgpu-labeller.yaml "$ROCM_LABELLER_SHA256"
+        kubectl create -f /tmp/k8s-ds-amdgpu-labeller.yaml
+        rm -f /tmp/k8s-ds-amdgpu-labeller.yaml
     fi
 
-    if ! kubectl wait --for=jsonpath='{.status.numberReady}'=1 --namespace=kube-system ds/amdgpu-device-plugin-daemonset --timeout=300s | grep "condition met"; then
+    if ! kubectl wait --for=jsonpath='{.status.numberReady}'=1 --namespace=kube-system ds/amdgpu-labeller-daemonset --timeout=300s | grep "condition met"; then
         exit 1
     else
-        echo "Successfully deployed ROCm GPU device plugin."
+        echo "Successfully deployed ROCm GPU node labeller."
     fi
 }
 
@@ -857,13 +1333,12 @@ function deploy_aup_learning_cloud_runtime() {
     kubectl wait --namespace jupyterhub \
         --for=condition=available --timeout=600s \
         deployment/hub deployment/proxy deployment/user-scheduler
-
-    kubectl label "$(kubectl get nodes -o name)" node-type="${ACCEL_KEY}" --overwrite
 }
 
 function upgrade_aup_learning_cloud_runtime() {
     detect_and_configure_gpu
     get_runtime_paths
+    refine_gpu_config_from_node_labels
     generate_values_overlay
 
     helm upgrade jupyterhub "${CHART_PATH}" --namespace jupyterhub \
@@ -900,8 +1375,6 @@ function dev_deploy() {
         --for=condition=available --timeout=600s \
         deployment/hub deployment/proxy deployment/user-scheduler
 
-    kubectl label "$(kubectl get nodes -o name)" node-type="${ACCEL_KEY}" --overwrite
-
     echo ""
     echo "Dev deployment ready.  Admin UI: http://localhost:30890/hub/admin/users"
 }
@@ -909,6 +1382,7 @@ function dev_deploy() {
 function dev_upgrade() {
     detect_and_configure_gpu
     get_runtime_paths
+    refine_gpu_config_from_node_labels
     generate_values_overlay
 
     local helm_args
@@ -949,6 +1423,8 @@ function deploy_all_components() {
 
     detect_and_configure_gpu
     get_runtime_paths
+    # First pass: use local detection so image pulls / builds have the correct
+    # GPU_TARGET. Overlay is regenerated below from labeller-published labels.
     generate_values_overlay
     install_tools
     install_k3s_single_node
@@ -964,6 +1440,11 @@ function deploy_all_components() {
     fi
 
     deploy_rocm_gpu_device_plugin
+    # Refine from the labeller's authoritative amd.com/gpu.product-name now
+    # that the DaemonSet is ready, then regenerate the overlay so helm uses
+    # the exact product string the scheduler will see on the node.
+    refine_gpu_config_from_node_labels
+    generate_values_overlay
     deploy_aup_learning_cloud_runtime
 }
 
@@ -1022,9 +1503,15 @@ function pack_save_manifests() {
     echo "--- Saving manifests ---"
     mkdir -p "${staging}/manifests"
 
-    wget -q "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml" \
+    wget -q "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/${ROCM_DEVICE_PLUGIN_COMMIT}/k8s-ds-amdgpu-dp.yaml" \
         -O "${staging}/manifests/k8s-ds-amdgpu-dp.yaml"
+    verify_sha256 "${staging}/manifests/k8s-ds-amdgpu-dp.yaml" "$ROCM_DEVICE_PLUGIN_SHA256"
     echo "  Saved ROCm device plugin DaemonSet."
+
+    wget -q "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/${ROCM_DEVICE_PLUGIN_COMMIT}/k8s-ds-amdgpu-labeller.yaml" \
+        -O "${staging}/manifests/k8s-ds-amdgpu-labeller.yaml"
+    verify_sha256 "${staging}/manifests/k8s-ds-amdgpu-labeller.yaml" "$ROCM_LABELLER_SHA256"
+    echo "  Saved ROCm node labeller DaemonSet."
 }
 
 function pack_copy_chart() {
@@ -1126,15 +1613,16 @@ function pack_save_external_images() {
     # Build list: runtime external images (skip build-only)
     local pack_images=("${EXTERNAL_IMAGES[@]}")
 
-    # Extract ROCm device plugin image from saved manifest
-    if [[ -f "${staging}/manifests/k8s-ds-amdgpu-dp.yaml" ]]; then
-        local dp_image
-        dp_image=$(sed -n 's/.*image:[[:space:]]*\([^ ]*\).*/\1/p' "${staging}/manifests/k8s-ds-amdgpu-dp.yaml" | head -1)
-        if [[ -n "${dp_image}" ]]; then
-            echo "  Found device plugin image: ${dp_image}"
-            pack_images+=("${dp_image}")
+    # Extract ROCm device plugin and labeller images from saved manifests
+    local rocm_manifest rocm_image
+    for rocm_manifest in "${staging}/manifests/k8s-ds-amdgpu-dp.yaml" "${staging}/manifests/k8s-ds-amdgpu-labeller.yaml"; do
+        [[ -f "${rocm_manifest}" ]] || continue
+        rocm_image=$(sed -n 's/.*image:[[:space:]]*\([^ ]*\).*/\1/p' "${rocm_manifest}" | head -1)
+        if [[ -n "${rocm_image}" ]]; then
+            echo "  Found ROCm image ($(basename "${rocm_manifest}")): ${rocm_image}"
+            pack_images+=("${rocm_image}")
         fi
-    fi
+    done
 
     local failed_images=()
     for image in "${pack_images[@]}"; do
@@ -1364,6 +1852,7 @@ case "$1" in
             deploy)
                 detect_and_configure_gpu
                 get_runtime_paths
+                refine_gpu_config_from_node_labels
                 generate_values_overlay
                 dev_deploy
                 ;;
@@ -1373,6 +1862,7 @@ case "$1" in
                 sleep 0.5
                 detect_and_configure_gpu
                 get_runtime_paths
+                refine_gpu_config_from_node_labels
                 generate_values_overlay
                 dev_deploy
                 ;;
@@ -1385,6 +1875,7 @@ case "$1" in
             install)
                 detect_and_configure_gpu
                 get_runtime_paths
+                refine_gpu_config_from_node_labels
                 generate_values_overlay
                 deploy_aup_learning_cloud_runtime
                 ;;
@@ -1395,6 +1886,7 @@ case "$1" in
                 sleep 0.5
                 detect_and_configure_gpu
                 get_runtime_paths
+                refine_gpu_config_from_node_labels
                 generate_values_overlay
                 deploy_aup_learning_cloud_runtime
                 ;;
@@ -1415,6 +1907,7 @@ case "$1" in
     install-runtime)
         detect_and_configure_gpu
         get_runtime_paths
+        refine_gpu_config_from_node_labels
         generate_values_overlay
         deploy_aup_learning_cloud_runtime
         ;;
