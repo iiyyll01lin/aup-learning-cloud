@@ -168,7 +168,7 @@ custom:
       displayName: "AMD Radeon™ AI Pro R9700 (Workstation GPU)"
       description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 32GB GDDR6"
       nodeSelector:
-         amd.com/gpu.product-name: "AMD_Radeon_AI_PRO_R9700"
+        amd.com/gpu.product-name: "AMD_Radeon_AI_PRO_R9700"
       env: {}
       quotaRate: 4
 
