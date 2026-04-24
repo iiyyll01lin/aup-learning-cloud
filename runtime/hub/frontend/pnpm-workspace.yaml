@@ -32,3 +32,4 @@ catalog:
   recharts: ^2.15.0
   tailwindcss: ^4.1.0
   "@tailwindcss/vite": ^4.1.0
+  "@tailwindcss/cli": ^4.1.0
