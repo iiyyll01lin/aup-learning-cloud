@@ -64,9 +64,7 @@ class AutoLoginAuthenticator(Authenticator):
                 # ``?next=`` directly and calling ``self.redirect`` would be
                 # an open redirect — see the JupyterHub upstream LoginHandler
                 # for the reference flow.
-                next_url = self.get_next_url(
-                    user, default=url_path_join(self.hub.base_url, "home")
-                )
+                next_url = self.get_next_url(user, default=url_path_join(self.hub.base_url, "home"))
 
                 self.log.info(f"Auto-login: user '{username}' authenticated, redirecting to {next_url}")
                 self.redirect(next_url)
