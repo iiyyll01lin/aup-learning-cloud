@@ -22,6 +22,7 @@ import { UserList } from './pages/UserList';
 import { GroupList } from './pages/GroupList';
 import { Dashboard } from './pages/Dashboard';
 import { NavBar } from './components/NavBar';
+import { PLATFORM_NAME } from '@auplc/shared';
 
 function App() {
 
@@ -31,7 +32,7 @@ function App() {
 
   return (
     <BrowserRouter basename={basePath}>
-      <div className="admin-page">
+      <div className="admin-page" data-platform={PLATFORM_NAME}>
         <NavBar />
         <Routes>
           <Route path="/users" element={<UserList />} />

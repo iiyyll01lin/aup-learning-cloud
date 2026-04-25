@@ -1201,6 +1201,36 @@ class GitHubReposHandler(APIHandler):
 
 
 # =============================================================================
+# Platform Identity Handler
+# =============================================================================
+
+
+class PlatformInfoHandler(APIHandler):
+    """Public endpoint returning platform identity metadata.
+
+    This handler requires no authentication so that any client — including
+    freshly-written frontend code — can confirm which platform it is running
+    on.  The response also sets the X-Powered-By header explicitly so that
+    machine clients inspecting individual API responses see the attribution
+    even if they bypass the Tornado-level default header.
+    """
+
+    async def get(self):
+        self.set_header("Content-Type", "application/json")
+        self.set_header("X-Powered-By", "AUP Learning Cloud")
+        self.finish(
+            json.dumps(
+                {
+                    "platform": "AUP Learning Cloud",
+                    "vendor": "Advanced Micro Devices, Inc.",
+                    "powered_by": "AUP Learning Cloud",
+                    "website": "https://github.com/AMDResearch/aup-learning-cloud",
+                }
+            )
+        )
+
+
+# =============================================================================
 # Group Management API Handlers
 # =============================================================================
 
@@ -1474,6 +1504,8 @@ def get_handlers() -> list[tuple[str, type]]:
         List of (route, handler_class) tuples
     """
     return [
+        # Platform identity (unauthenticated — always accessible)
+        (r"/api/platform", PlatformInfoHandler),
         # Password management
         (r"/auth/change-password", ChangePasswordHandler),
         (r"/auth/check-force-password-change", CheckForcePasswordChangeHandler),
@@ -1521,6 +1553,8 @@ def get_handlers() -> list[tuple[str, type]]:
 
 
 __all__ = [
+    # Platform identity
+    "PlatformInfoHandler",
     # Password handlers
     "CheckForcePasswordChangeHandler",
     "ChangePasswordHandler",
