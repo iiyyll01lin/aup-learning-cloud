@@ -117,6 +117,13 @@ if _hub_allowed_origins:
 
 c.JupyterHub.tornado_settings = _BASE_TORNADO_SETTINGS
 
+# Harden _xsrf session cookie.
+# - Secure: only transmitted over HTTPS (safe because HSTS is enforced site-wide).
+# - SameSite=Lax: blocks cross-site POST forgery while allowing top-level navigations.
+# - HttpOnly is intentionally omitted: JupyterHub's frontend JS reads _xsrf to
+#   include it in form submissions, so HttpOnly would break the XSRF protection.
+c.JupyterHub.cookie_options = {"Secure": True, "SameSite": "Lax"}
+
 # Database configuration
 db_type = z2jh.get_config("hub.db.type")
 if db_type == "sqlite-pvc":
