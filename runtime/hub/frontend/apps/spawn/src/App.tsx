@@ -19,7 +19,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { Resource, Accelerator, GitHubRepo } from '@auplc/shared';
-import { validateRepo, fetchGitHubRepos, isCurrentUserGitHub } from '@auplc/shared';
+import { validateRepo, fetchGitHubRepos, isCurrentUserGitHub, PLATFORM_NAME } from '@auplc/shared';
 
 type Theme = 'light' | 'dark';
 function getInitialTheme(): Theme {
@@ -351,7 +351,7 @@ function App() {
           </button>
         </div>
         <h1>Launch Your Server</h1>
-        <p>Select a resource, configure your environment, and launch</p>
+        <p>Select a resource, configure your environment, and launch on {PLATFORM_NAME}</p>
       </div>
 
       {/* Warnings */}

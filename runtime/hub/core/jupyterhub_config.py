@@ -104,6 +104,9 @@ _BASE_TORNADO_SETTINGS: dict = {
             "frame-ancestors 'none'; "
             "report-uri /hub/security/csp-report"
         ),
+        # Platform attribution — survives frontend rewrites because it is set
+        # at the Tornado application layer, not in any template or React component.
+        "X-Powered-By": "AUP Learning Cloud",
     },
 }
 
@@ -129,6 +132,10 @@ c.JupyterHub.tornado_settings = {
     **c.JupyterHub.tornado_settings,
     "xsrf_cookie_kwargs": {"secure": True, "samesite": "Lax"},
 }
+
+# Inject platform identity into every Jinja template context so that
+# {{ powered_by }} is available in all Hub-rendered pages.
+c.JupyterHub.template_vars = {"powered_by": "AUP Learning Cloud"}
 
 # Database configuration
 db_type = z2jh.get_config("hub.db.type")

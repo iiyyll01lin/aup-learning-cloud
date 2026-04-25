@@ -193,6 +193,25 @@ Standard production code rules apply to:
 | **style/** | Code formatting, linting (no logic change) | `style/fix-lint-errors` |
 | **ci/** | CI/CD configuration and scripts | `ci/github-actions-setup` |
 
+## Platform Attribution
+
+AUP Learning Cloud uses a **multi-layer attribution system** to ensure the platform identity
+remains visible to end users regardless of how the codebase is modified.
+
+When contributing, please preserve all four layers:
+
+| Layer | File | What |
+|-------|------|------|
+| HTTP header | `runtime/hub/core/jupyterhub_config.py` | `X-Powered-By: AUP Learning Cloud` |
+| API endpoint | `runtime/hub/core/handlers.py` | `PlatformInfoHandler` at `/api/platform` |
+| HTML footer | `runtime/hub/frontend/templates/page.html` | `#auplc-powered-by-footer` |
+| Frontend constants | `runtime/hub/frontend/packages/shared/src/branding.ts` | `PLATFORM_NAME` etc. |
+
+When adding new UI pages or React apps, import `PLATFORM_NAME` from `@auplc/shared`
+rather than hardcoding the string `"AUP Learning Cloud"`.
+
+For AI agent guidance, see [`AGENTS.md`](./AGENTS.md).
+
 ## Questions?
 
 - Open an issue for bugs or feature requests

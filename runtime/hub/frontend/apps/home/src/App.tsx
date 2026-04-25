@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Resource, ResourceGroup, UserQuotaInfo, UserDetail } from "@auplc/shared";
-import { getResources, getMyQuota, getMyUsage } from "@auplc/shared";
+import { getResources, getMyQuota, getMyUsage, PLATFORM_NAME } from "@auplc/shared";
 
 type Theme = "light" | "dark";
 function getInitialTheme(): Theme {
@@ -229,7 +229,7 @@ function App() {
             {getGreeting()}, {jhdata.user ?? "student"}
           </p>
           <h1>
-            Welcome to <span className="accent">AUP Learning Cloud</span>
+            Welcome to <span className="accent">{PLATFORM_NAME}</span>
           </h1>
           <p className="hero-desc">
             Experience next-generation AI acceleration with AMD ROCm. Launch
@@ -556,15 +556,6 @@ function App() {
             </div>
           </div>
         </section>
-      </div>
-
-      {/* Footer */}
-      <div className="home-footer">
-        <div className="container">
-          &copy; 2025–2026 Advanced Micro Devices, Inc. All rights reserved.
-          &middot;
-          AUP Learning Cloud
-        </div>
       </div>
 
       {/* Stop Server Confirm Modal */}
