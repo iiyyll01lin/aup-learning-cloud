@@ -35,10 +35,10 @@ export async function apiRequest<T>(
   });
 
   if (!response.ok) {
-    const error = await response
+    const body = await response
       .json()
       .catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `API Error: ${response.status}`);
+    throw new Error(body.error || body.message || `API Error: ${response.status}`);
   }
 
   if (response.status === 202 || response.status === 204) {
@@ -64,10 +64,10 @@ export async function adminApiRequest<T>(
   });
 
   if (!response.ok) {
-    const error = await response
+    const body = await response
       .json()
       .catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `API Error: ${response.status}`);
+    throw new Error(body.error || body.message || `API Error: ${response.status}`);
   }
 
   return response.json();

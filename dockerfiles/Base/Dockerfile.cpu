@@ -25,7 +25,9 @@ ARG BASE_IMAGE=quay.io/jupyter/base-notebook
 FROM $BASE_IMAGE
 LABEL maintainer="Jupyter Project <jupyter@googlegroups.com>"
 
-ARG JUPYTERHUB_VERSION=""
+# Align jupyterhub package with the Hub image version (runtime/chart/Chart.yaml
+# appVersion) so the singleuser <-> hub protocol stays in sync.
+ARG JUPYTERHUB_VERSION="5.4.4"
 ARG PIP_INDEX_URL=
 
 # Set pip index URL if specified

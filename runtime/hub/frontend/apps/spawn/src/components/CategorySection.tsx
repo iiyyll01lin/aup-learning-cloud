@@ -42,6 +42,8 @@ interface Props {
   githubRepos: GitHubRepo[];
   githubAppInstalled: boolean;
   onSelectGitHubRepo: (repo: GitHubRepo) => void;
+  favorites?: Set<string>;
+  onToggleFavorite?: (key: string) => void;
 }
 
 export const CategorySection = memo(function CategorySection({
@@ -65,6 +67,8 @@ export const CategorySection = memo(function CategorySection({
   githubRepos,
   githubAppInstalled,
   onSelectGitHubRepo,
+  favorites,
+  onToggleFavorite,
 }: Props) {
   const handleToggle = useCallback(() => {
     // When collapsing, clear selection if the selected resource is in this group
@@ -89,8 +93,18 @@ export const CategorySection = memo(function CategorySection({
       </div>
       <div className="collapsible-content">
         {group.resources.map((resource) => (
+          <div key={resource.key} style={{ position: 'relative' }}>
+            {onToggleFavorite && (
+              <button
+                type="button"
+                className="fav-star"
+                title={favorites?.has(resource.key) ? 'Remove from favorites' : 'Add to favorites'}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(resource.key); }}
+              >
+                {favorites?.has(resource.key) ? '★' : '☆'}
+              </button>
+            )}
           <CourseCard
-            key={resource.key}
             resource={resource}
             selected={selectedResource?.key === resource.key}
             onSelect={onSelectResource}
@@ -109,6 +123,7 @@ export const CategorySection = memo(function CategorySection({
             githubAppInstalled={githubAppInstalled}
             onSelectGitHubRepo={onSelectGitHubRepo}
           />
+          </div>
         ))}
       </div>
     </div>

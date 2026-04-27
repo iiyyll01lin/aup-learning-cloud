@@ -35,10 +35,18 @@ import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-import aiohttp
 from jupyterhub.user import User as JupyterHubUser
 from kubespawner import KubeSpawner
 from tornado import web
+
+from core.metrics import (
+    pod_failure_total,
+    repo_clone_failed_total,
+    session_runtime_minutes,
+    spawn_duration_seconds,
+    spawn_failed_total,
+    spawn_gpu_total,
+)
 
 if TYPE_CHECKING:
     from core.config import HubConfig
@@ -101,6 +109,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
     DEFAULT_ACCESS_TOKEN: bool = False
     DEFAULT_ACCESS_TOKEN_SECRET: str = "jupyterhub-git-default-token"
 
+    # Allowed origins for notebook server WebSocket connections
+    notebook_allowed_origins: list[str] = []
+
     @classmethod
     def configure_from_config(cls, config: HubConfig) -> None:
         """
@@ -143,118 +154,69 @@ class RemoteLabKubeSpawner(KubeSpawner):
         cls.GITHUB_APP_NAME = git_config.githubAppName
         cls.DEFAULT_ACCESS_TOKEN = bool(git_config.defaultAccessToken)
 
-    async def get_user_teams(self) -> list[str]:
-        """
-        Get available resources for the user based on their GitHub team membership.
+        # Extract singleuser allowed origins
+        cls.notebook_allowed_origins = list(config.notebook_network.allowedOrigins)
+
+    async def get_user_resources(self) -> list[str]:
+        """Get available resources for the user based on their JupyterHub group memberships.
+
+        For auto-login/dummy modes, returns the "official" resource set.
+        For all other users, resolves resources from JupyterHub groups
+        (which are synced from GitHub teams or assigned to native users
+        via the auth_state_hook). Falls back to legacy pattern matching
+        for native users with no group assignments.
 
         Returns:
             List of resource names the user can access
         """
         username = self.user.name.strip()
-        username_upper = username.upper()
-        self.log.debug(f"Checking resource group for user: {username}")
+        self.log.debug(f"Resolving resources for user: {username}")
 
         # Auto-login or dummy mode: grant all resources
         if self.auth_mode in ["auto-login", "dummy"]:
             self.log.debug(f"Auth mode '{self.auth_mode}': granting all resources")
             return self.team_resource_mapping.get("official", [])
 
-        # Native users (no prefix) - check by absence of "github:" prefix
+        # Resolve resources from JupyterHub groups
+        from core.groups import get_resources_for_user
+
+        available_resources = get_resources_for_user(self.user, self.team_resource_mapping)
+
+        if available_resources:
+            self.log.debug(f"User '{username}' resources from groups: {available_resources}")
+            return available_resources
+
+        # Defensive fallback: auth_state_hook should have already assigned
+        # native users to the "native-users" group, but if that failed for
+        # any reason, fall back to the mapping entry directly.
         if not username.startswith("github:"):
-            self.log.debug(f"Native user detected: {username}")
-            if "AUP" in username_upper:
-                self.log.debug("Matched AUP user group")
-                return self.team_resource_mapping.get("AUP", [])
-            elif "TEST" in username_upper:
-                self.log.debug("Matched TEST user group")
-                return self.team_resource_mapping.get("official", [])
-            # Default for native users
-            self.log.debug("Native user with default resources")
+            self.log.debug(f"Native user '{username}' has no groups, using default fallback")
             return self.team_resource_mapping.get("native-users", self.team_resource_mapping.get("official", []))
 
-        # GitHub users - fetch team membership
-        auth_state = await self.user.get_auth_state()
-        if not auth_state or "access_token" not in auth_state:
-            self.log.debug(
-                "No auth state or access token found, setting to NONE, check if there is a local account config error."
-            )
-            return ["none"]
-
-        access_token = auth_state["access_token"]
-        headers = {
-            "Authorization": f"token {access_token}",
-            "Accept": "application/vnd.github.v3+json",
-        }
-
-        teams = []
-        try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.get("https://api.github.com/user/teams", headers=headers) as resp,
-            ):
-                if resp.status == 200:
-                    data = await resp.json()
-                    for team in data:
-                        if team["organization"]["login"] == self.github_org_name:
-                            teams.append(team["slug"])
-                else:
-                    self.log.debug(f"GitHub API request failed with status {resp.status}")
-        except Exception as e:
-            self.log.debug(f"Error fetching teams: {e}")
-
-        # Map teams to available resources
-        available_resources = []
-        for team, resources in self.team_resource_mapping.items():
-            if team in teams:
-                if team == "official":
-                    available_resources = self.team_resource_mapping[team]
-                    break
-                else:
-                    available_resources.extend(resources)
-
-        # Remove duplicates while preserving order
-        available_resources = list(dict.fromkeys(available_resources))
-
-        # If no teams found, provide basic access
-        if not available_resources:
-            available_resources = ["none"]
-            self.log.debug("No team info for this user, set to none")
-
-        self.log.debug(f"User teams: {teams} Available resources: {available_resources}")
-
-        return available_resources
+        # GitHub user with no matching groups
+        self.log.debug(f"No resources found for user '{username}', set to none")
+        return ["none"]
 
     async def options_form(self, _) -> str:
-        """Generate the HTML form for resource selection."""
+        """Generate the HTML form for resource selection.
+
+        Returns a <script> tag that injects ``window.AVAILABLE_RESOURCES``
+        and ``window.SINGLE_NODE_MODE`` for the React spawn app.  The custom
+        ``spawn.html`` template renders this via ``{{ spawner_options_form | safe }}``.
+        """
         try:
-            available_resource_names = await self.get_user_teams()
+            available_resource_names = await self.get_user_resources()
             self.log.debug(f"Providing users with following resources: {available_resource_names}")
 
-            # Use template path
-            template_path = os.environ.get("JUPYTERHUB_TEMPLATE_PATH", "/srv/jupyterhub/templates")
-            template_file = os.path.join(template_path, "resource_options_form.html")
+            available_resources_js = json.dumps(available_resource_names)
+            single_node_mode_js = "true" if self.single_node_mode else "false"
 
-            if os.path.exists(template_file):
-                with open(template_file, encoding="utf-8") as f:
-                    html_content = f.read()
-
-                # Inject available resources and config from backend
-                available_resources_js = json.dumps(available_resource_names)
-                single_node_mode_js = "true" if self.single_node_mode else "false"
-                injection_script = f"""
-<script>
-    window.AVAILABLE_RESOURCES = {available_resources_js};
-    window.SINGLE_NODE_MODE = {single_node_mode_js};
-</script>
-</head>"""
-
-                html_content = html_content.replace("</head>", injection_script)
-
-                self.log.debug(f"Successfully loaded template from {template_file}")
-                return html_content
-            else:
-                self.log.debug(f"Failed to load template from {template_file}, Fall back to basic form.")
-                return self._generate_fallback_form(available_resource_names)
+            return (
+                "<script>"
+                f"window.AVAILABLE_RESOURCES={available_resources_js};"
+                f"window.SINGLE_NODE_MODE={single_node_mode_js};"
+                "</script>"
+            )
 
         except Exception as e:
             self.log.error(f"Failed to load options form: {e}", exc_info=True)
@@ -521,7 +483,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         clone_dir = f"{home_mount_path}/{repo_name}"
 
-        env = [
+        env: list[dict[str, Any]] = [
             {"name": "REPO_URL", "value": repo_url},
             {"name": "CLONE_DIR", "value": clone_dir},
             {"name": "MAX_CLONE_TIMEOUT", "value": str(self.MAX_CLONE_TIMEOUT)},
@@ -748,18 +710,24 @@ class RemoteLabKubeSpawner(KubeSpawner):
         # Determine accelerator type for quota calculation
         accelerator_type = gpu_selection if gpu_selection else "cpu"
 
+        # Prometheus metric: spawn attempt
+        with contextlib.suppress(Exception):
+            spawn_gpu_total.labels(accelerator=accelerator_type).inc()
+
+        from core.quota import get_quota_manager
+
+        quota_manager = get_quota_manager()
+
+        # Always start a usage session for tracking, regardless of quota state
+        self.usage_session_id = quota_manager.start_usage_session(username, resource_type, accelerator_type)
+
         # Quota check (if enabled)
         if self.quota_enabled:
-            from core.quota import get_quota_manager
-
-            quota_manager = get_quota_manager()
-
             # Check if user has unlimited quota
             has_unlimited = quota_manager.is_unlimited_in_db(username)
 
             if has_unlimited:
                 print(f"[QUOTA] User {username} has unlimited quota, skipping quota check")
-                self.usage_session_id = None
                 self._has_unlimited_quota = True
             else:
                 can_start, message, estimated_cost = quota_manager.can_start_container(
@@ -772,22 +740,24 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
                 if not can_start:
                     print(f"[QUOTA] Blocked container start for {username}: {message}")
+                    with contextlib.suppress(Exception):
+                        spawn_failed_total.labels(reason="quota").inc()
                     raise web.HTTPError(
                         403,
                         f"Cannot start container: {message}. Please contact administrator to add quota.",
                     )
 
-                # Start usage session for tracking
-                self.usage_session_id = quota_manager.start_usage_session(username, accelerator_type)
                 self._has_unlimited_quota = False
                 print(
                     f"[QUOTA] Session {self.usage_session_id} started for {username} ({accelerator_type}), estimated cost: {estimated_cost}"
                 )
         else:
-            self.usage_session_id = None
             self._has_unlimited_quota = True
 
         start_time = int(time.time())
+
+        # Track spawn start time for metrics
+        self._spawn_start_timestamp = time.time()
 
         # Calculate quota rate for this accelerator type
         quota_rate = self.get_quota_rate(accelerator_type) if self.quota_enabled else 0
@@ -801,6 +771,17 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 "QUOTA_RATE": str(quota_rate),
             }
         )
+
+        # Inject allowed origins into notebook server startup args
+        if self.notebook_allowed_origins:
+            origin_pat = "|".join(re.escape(o) if o != "*" else ".*" for o in self.notebook_allowed_origins)
+            extra_args = list(self.args or [])
+            extra_args += [
+                f"--ServerApp.allow_origin_pat={origin_pat}",
+            ]
+            if "*" in self.notebook_allowed_origins:
+                extra_args.append("--ServerApp.allow_origin=*")
+            self.args = extra_args
 
         # Prefer a repo URL provided by the frontend only; do not fallback to config
         try:
@@ -890,6 +871,16 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 if monitor_task in done and not monitor_task.cancelled():
                     monitor_task.result()  # re-raises failure RuntimeError
                 start_result = start_task.result()
+
+                # Record spawn duration metric
+                try:
+                    if hasattr(self, "_spawn_start_timestamp"):
+                        duration = time.time() - self._spawn_start_timestamp
+                        spawn_duration_seconds.observe(duration)
+                        accelerator_type = self.user_options.get("gpu_selection") or "cpu"
+                        # active session count is derived from quota manager, not inc/dec
+                except Exception:
+                    pass
             except Exception:
                 with contextlib.suppress(Exception):
                     await self.stop(True)
@@ -937,6 +928,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
                 seen_running = True
                 continue
             if phase == "Failed" and seen_running:
+                try:
+                    pod_failure_total.labels(reason="git_clone_failed").inc()
+                    repo_clone_failed_total.inc()
+                except Exception:
+                    pass
+
                 raise RuntimeError(
                     "Server failed to start: the Git repository could not be cloned. "
                     "Verify the URL is correct and the repository is publicly accessible."
@@ -947,23 +944,44 @@ class RemoteLabKubeSpawner(KubeSpawner):
         # Clean up any leftover git token secrets
         await self._cleanup_git_token_secrets()
 
-        if self.quota_enabled and hasattr(self, "usage_session_id") and self.usage_session_id:
-            session_id = self.usage_session_id
-            username = self.user.name
+        username = self.user.name
+        try:
+            from core.quota import get_quota_manager
+
+            quota_manager = get_quota_manager()
+            quota_rates = self.quota_rates if self.quota_enabled else None
+
+            session_id = getattr(self, "usage_session_id", None)
             self.usage_session_id = None
 
-            try:
-                from core.quota import get_quota_manager
-
-                quota_manager = get_quota_manager()
-                duration, quota_used = quota_manager.end_usage_session(session_id, self.quota_rates)
-                print(f"[QUOTA] Session ended for {username}. Duration: {duration} min, Quota used: {quota_used}")
-            except Exception as e:
-                print(f"[QUOTA] Error ending session for {username}: {e}")
+            if session_id:
+                duration, quota_used = quota_manager.end_usage_session(session_id, quota_rates)
+                print(f"[USAGE] Session ended for {username}. Duration: {duration} min, Quota used: {quota_used}")
+            else:
+                # Hub may have restarted and lost in-memory session id — find and close any active session for this user
+                active = quota_manager.get_active_session(username)
+                if active:
+                    duration, quota_used = quota_manager.end_usage_session(active["session_id"], quota_rates)
+                    print(
+                        f"[USAGE] Recovered session for {username}. Duration: {duration} min, Quota used: {quota_used}"
+                    )
+        except Exception as e:
+            print(f"[USAGE] Error ending session for {username}: {e}")
 
         if hasattr(self, "check_timer") and self.check_timer:
             with contextlib.suppress(Exception):
                 self.check_timer.cancel()
+
+        try:
+            start_ts = getattr(self, "_spawn_start_timestamp", None)
+
+            if start_ts:
+                runtime_minutes = max(0, (time.time() - start_ts) / 60.0)
+                session_runtime_minutes.observe(runtime_minutes)
+
+            # active session metric is derived from quota manager state
+        except Exception:
+            pass
 
         return await super().stop(now=now)
 

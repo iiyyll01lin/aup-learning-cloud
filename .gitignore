@@ -372,3 +372,7 @@ dockerfiles/Courses/DL/data/FashionMNIST/raw/
 # Local config overrides (any file containing 'local')
 *local*
 *.local.*
+
+# Offline bundle artifacts
+auplc-bundle-*/
+auplc-bundle-*.tar.gz

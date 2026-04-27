@@ -1,0 +1,28 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.hubMetrics.enabled .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: hub-alerts
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+    release: {{ .Values.monitoring.releaseLabel }}
+spec:
+  groups:
+    - name: hub.rules
+      rules:
+        - alert: HubSpawnFailures
+          expr: rate(hub_spawn_failed_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Hub spawn failures detected
+
+        - alert: HubPodFailures
+          expr: rate(hub_pod_failure_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Hub pod failures detected
+{{- end }}

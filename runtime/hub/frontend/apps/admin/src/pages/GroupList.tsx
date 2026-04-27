@@ -18,8 +18,7 @@
 // SOFTWARE.
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Table, Button, Form, InputGroup, Alert, Spinner, Modal } from 'react-bootstrap';
+import { Table, Button, Form, InputGroup, Alert, Spinner, Modal, Badge } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 import type { MultiValue, ActionMeta, StylesConfig } from 'react-select';
 import type { Group } from '@auplc/shared';
@@ -103,6 +102,42 @@ interface UserOption {
   label: string;
 }
 
+const COLLAPSED_LIMIT = 3;
+
+function ResourceBadges({ resources }: { resources: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (resources.length === 0) return <span className="text-muted small">--</span>;
+  const visible = expanded ? resources : resources.slice(0, COLLAPSED_LIMIT);
+  const hidden = resources.length - COLLAPSED_LIMIT;
+  return (
+    <div className="d-flex flex-wrap gap-1 align-items-center">
+      {visible.map(r => <Badge key={r} bg="info" className="fw-normal">{r}</Badge>)}
+      {!expanded && hidden > 0 && (
+        <Badge
+          bg="secondary"
+          className="fw-normal"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setExpanded(true)}
+          title="Show all"
+        >
+          +{hidden}
+        </Badge>
+      )}
+      {expanded && resources.length > COLLAPSED_LIMIT && (
+        <Badge
+          bg="secondary"
+          className="fw-normal"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setExpanded(false)}
+          title="Collapse"
+        >
+          ▲
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 // Memoized GroupRow component with inline member management
 interface GroupRowProps {
   group: Group;
@@ -116,6 +151,9 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
   const [isDark, setIsDark] = useState(() =>
     document.documentElement.getAttribute('data-bs-theme') === 'dark'
   );
+
+  const isGitHubTeam = group.source === 'github-team';
+  const isReadOnly = group.source === 'system';
 
   // Watch for theme changes
   useEffect(() => {
@@ -150,15 +188,12 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
     setIsUpdating(true);
     try {
       if (actionMeta.action === 'select-option' && actionMeta.option) {
-        // Add user to group
         await api.addUserToGroup(group.name, actionMeta.option.value);
         onMembersChange(group.name, [...group.users, actionMeta.option.value]);
       } else if (actionMeta.action === 'remove-value' && actionMeta.removedValue) {
-        // Remove user from group
         await api.removeUserFromGroup(group.name, actionMeta.removedValue.value);
         onMembersChange(group.name, group.users.filter(u => u !== actionMeta.removedValue!.value));
       } else if (actionMeta.action === 'clear') {
-        // Remove all users
         for (const user of group.users) {
           await api.removeUserFromGroup(group.name, user);
         }
@@ -173,7 +208,24 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
 
   return (
     <tr>
-      <td style={{ width: '200px', verticalAlign: 'middle' }}>{group.name}</td>
+      <td style={{ width: '200px', verticalAlign: 'middle' }}>
+        <div className="d-flex align-items-center gap-2">
+          {group.name}
+          {isGitHubTeam ? (
+            <Badge bg="dark" title="Synced from GitHub Teams">
+              <i className="bi bi-github me-1"></i>GitHub
+            </Badge>
+          ) : group.source === 'system' ? (
+            <Badge bg="info" title="System-managed group">System</Badge>
+          ) : (
+            <Badge bg="secondary" title="Manually managed group">Manual</Badge>
+          )}
+        </div>
+        <div style={{ fontSize: '0.7rem', color: 'var(--home-text-muted)', marginTop: '2px' }}>
+          {group.users.length} {group.users.length === 1 ? 'member' : 'members'}
+          {(group.resources?.length ?? 0) > 0 && ` · ${group.resources!.length} resources`}
+        </div>
+      </td>
       <td>
         <AsyncSelect<UserOption, true>
           isMulti
@@ -182,16 +234,23 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
           value={currentMembers}
           loadOptions={loadOptions}
           onChange={handleChange}
-          isDisabled={isUpdating}
+          isDisabled={isUpdating || isReadOnly}
+          isClearable={!isReadOnly}
           isLoading={isUpdating}
-          placeholder="Type to search and add users..."
+          placeholder={isReadOnly ? 'System-managed members' : (isGitHubTeam ? 'Add users (synced members are auto-managed)...' : 'Type to search and add users...')}
           noOptionsMessage={({ inputValue }) =>
             inputValue ? 'No users found' : 'Type to search users'
           }
           loadingMessage={() => 'Searching...'}
           menuPortalTarget={document.body}
           styles={getSelectStyles(isDark)}
+          {...(isReadOnly && {
+            components: { MultiValueRemove: () => null },
+          })}
         />
+      </td>
+      <td style={{ verticalAlign: 'middle' }}>
+        <ResourceBadges resources={group.resources ?? []} />
       </td>
       <td style={{ width: '120px', verticalAlign: 'middle' }}>
         <Button
@@ -208,8 +267,8 @@ const GroupRow = memo(function GroupRow({ group, onEdit, onMembersChange, loadUs
 });
 
 export function GroupList() {
-  const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [githubOrg, setGithubOrg] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -220,6 +279,11 @@ export function GroupList() {
   const [newGroupName, setNewGroupName] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [showInfo, setShowInfo] = useState(() =>
+    localStorage.getItem('grouplist-hide-info') !== '1'
+  );
 
   // Debounce search input
   useEffect(() => {
@@ -233,8 +297,9 @@ export function GroupList() {
     try {
       setLoading(true);
       setError(null);
-      const groupList = await api.getGroups();
-      setGroups(groupList);
+      const response = await api.getGroups();
+      setGroups(response.groups);
+      setGithubOrg(response.github_org || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load groups');
     } finally {
@@ -312,6 +377,24 @@ export function GroupList() {
     }
   };
 
+  const handleSync = useCallback(async () => {
+    try {
+      setSyncing(true);
+      setSyncResult(null);
+      setError(null);
+      const result = await api.syncGroups();
+      setSyncResult(
+        `Sync complete: ${result.synced} synced, ${result.failed} failed, ${result.skipped} skipped`
+      );
+      setTimeout(() => setSyncResult(null), 5000);
+      await loadGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync groups');
+    } finally {
+      setSyncing(false);
+    }
+  }, [loadGroups]);
+
   const handleCloseEditModal = useCallback(() => {
     setShowEditModal(false);
     setSelectedGroup(null);
@@ -343,15 +426,42 @@ export function GroupList() {
           <Button variant="dark" onClick={() => setShowCreateModal(true)}>
             Create Group
           </Button>
+          {githubOrg && (
+            <>
+              <Button
+                variant="outline-secondary"
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                {syncing ? (
+                  <><Spinner animation="border" size="sm" className="me-1" />Syncing...</>
+                ) : (
+                  <><i className="bi bi-arrow-repeat me-1"></i>Sync Now</>
+                )}
+              </Button>
+              <Button
+                variant="outline-secondary"
+                as="a"
+                href={`https://github.com/orgs/${githubOrg}/teams`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <i className="bi bi-github me-1"></i>Manage Teams
+              </Button>
+              {!showInfo && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => { setShowInfo(true); localStorage.removeItem('grouplist-hide-info'); }}
+                  title="Show group info"
+                >
+                  <i className="bi bi-info-circle"></i>
+                </Button>
+              )}
+            </>
+          )}
         </div>
         <div className="d-flex gap-2">
-          <Button
-            variant="outline-secondary"
-            onClick={() => navigate('/users')}
-          >
-            Back to Users
-          </Button>
-          <Button
+<Button
             variant="outline-secondary"
             as="a"
             href={`${window.jhdata?.base_url ?? '/hub/'}admin`}
@@ -361,9 +471,34 @@ export function GroupList() {
         </div>
       </div>
 
+      {/* Group behavior info */}
+      {githubOrg && showInfo && (
+        <Alert variant="light" className="border small" dismissible onClose={() => { setShowInfo(false); localStorage.setItem('grouplist-hide-info', '1'); }}>
+          <i className="bi bi-info-circle me-1"></i>
+          Groups with <Badge bg="dark"><i className="bi bi-github me-1"></i>GitHub</Badge> badge are synced from{' '}
+          <a href={`https://github.com/orgs/${githubOrg}/teams`} target="_blank" rel="noopener noreferrer">
+            {githubOrg}
+          </a>{' '}
+          organization teams. Synced members are auto-managed by GitHub, but you can manually add
+          users (e.g. native users) to grant them the same resources.
+          Team data is captured at login, and group membership is updated when the user starts a server
+          &mdash; changes on GitHub may not appear until the user re-logs in and spawns.
+          Use &quot;Sync Now&quot; to immediately refresh all users&apos; team memberships.
+          If a manually created group shares its name with a GitHub team, it will be automatically converted
+          to a GitHub-managed group when a team member logs in and spawns. Use &quot;Release Protection&quot; in group
+          properties to convert a protected group back to manual management.
+        </Alert>
+      )}
+
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {syncResult && (
+        <Alert variant="success" dismissible onClose={() => setSyncResult(null)}>
+          {syncResult}
         </Alert>
       )}
 
@@ -390,6 +525,7 @@ export function GroupList() {
           <tr>
             <th style={{ width: '200px' }}>Group Name</th>
             <th>Members</th>
+            <th style={{ width: '200px' }}>Resources</th>
             <th style={{ width: '120px' }}>Actions</th>
           </tr>
         </thead>

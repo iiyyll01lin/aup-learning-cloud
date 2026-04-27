@@ -17,29 +17,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { Container } from 'react-bootstrap';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserList } from './pages/UserList';
 import { GroupList } from './pages/GroupList';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
+import { Dashboard } from './pages/Dashboard';
+import { NavBar } from './components/NavBar';
+import { PLATFORM_NAME } from '@auplc/shared';
 
 function App() {
 
-  // Get base URL from window.jhdata (set by JupyterHub)
   const jhdata = window.jhdata ?? {};
-  const baseUrl = (jhdata.base_url || '/hub/').replace(/\/+$/, ''); // Remove trailing slash
+  const baseUrl = (jhdata.base_url || '/hub/').replace(/\/+$/, '');
   const basePath = `${baseUrl}/admin`;
 
   return (
     <BrowserRouter basename={basePath}>
-      <Container className="py-4">
+      <div className="admin-page" data-platform={PLATFORM_NAME}>
+        <NavBar />
         <Routes>
           <Route path="/users" element={<UserList />} />
           <Route path="/groups" element={<GroupList />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
         </Routes>
-      </Container>
+      </div>
     </BrowserRouter>
   );
 }

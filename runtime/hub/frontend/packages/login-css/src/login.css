@@ -1,0 +1,22 @@
+/*
+ * Same-origin Tailwind CSS for the JupyterHub login Jinja template.
+ *
+ * The login page is server-rendered by JupyterHub (not a React app), so
+ * it cannot go through the apps/admin|spawn|home Vite pipeline. We build
+ * a dedicated static CSS bundle here that scans the Jinja templates for
+ * class usage and emits a minified file served from /hub/static/css/.
+ *
+ * Replaces https://cdn.tailwindcss.com which is a development-only JIT
+ * compiler not meant for production, and which introduced a third-party
+ * supply-chain dependency without Subresource Integrity (see security
+ * audit - remove-tailwind-cdn).
+ */
+
+/*
+ * Disable Tailwind v4 auto-detection and scan only the Jinja templates.
+ * Auto-detection would otherwise crawl packages/apps/ and either
+ * duplicate what the React apps already emit or pull in classes this
+ * small login bundle doesn't need.
+ */
+@import "tailwindcss" source(none);
+@source "../../../templates/**/*.html";

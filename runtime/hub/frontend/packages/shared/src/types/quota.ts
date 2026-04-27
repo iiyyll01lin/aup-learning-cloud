@@ -42,6 +42,7 @@ export interface QuotaRates {
   rates: Record<string, number>;
   minimum_to_start: number;
   enabled: boolean;
+  default_quota?: number;
 }
 
 export interface UserQuotaInfo {

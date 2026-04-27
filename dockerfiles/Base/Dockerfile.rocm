@@ -43,8 +43,10 @@ ARG ROCM_VERSION=7.11.0
 ARG PYTORCH_VERSION=2.9.1
 ARG TORCHVISION_VERSION=0.24.0
 ARG TORCHAUDIO_VERSION=2.9.0
-# PyTorch wheel target — may differ from GPU_TARGET (e.g. gfx110x → gfx110X-all)
-# See https://repo.amd.com/rocm/whl/ for available targets
+# PyTorch wheel target — only differs from GPU_TARGET for the generic
+# buckets (gfx110x → gfx110X-all, gfx120x → gfx120X-all). Specific targets
+# like gfx1150/gfx1151/gfx1152 use the same name in both apt and wheel repos.
+# See https://repo.amd.com/rocm/whl/ for available targets.
 ARG PYTORCH_WHL_TARGET=
 ARG PYTORCH_INDEX_URL=
 
@@ -79,6 +81,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   fonts-liberation \
   run-one \
   libatomic1 \
+  unzip \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
@@ -107,10 +110,29 @@ RUN apt-get update && \
         done; \
     fi
 
-# Install ROCm PyTorch
-RUN WHL_TARGET="${PYTORCH_WHL_TARGET:-${GPU_TARGET}}" && \
+# Install ROCm PyTorch.
+#
+# The apt and pip repos do NOT use the same naming convention for the generic
+# RDNA buckets: apt ships `amdrocm<ver>-gfx110x` / `amdrocm<ver>-gfx120x`, but
+# the pip wheel index at https://repo.amd.com/rocm/whl/ only serves the
+# `gfx110X-all` / `gfx120X-all` paths (the short lowercase paths return 403).
+#
+# CI passes PYTORCH_WHL_TARGET explicitly via .github/build-config.json. For
+# local builds driven by dockerfiles/Makefile or auplc-installer — which only
+# set GPU_TARGET — we derive the wheel target here so ad-hoc
+# `docker build --build-arg GPU_TARGET=gfx120x` and `make base-rocm
+# GPU_TARGET=gfx120x` both Just Work.
+RUN WHL_TARGET="${PYTORCH_WHL_TARGET}" && \
+    if [ -z "${WHL_TARGET}" ]; then \
+        case "${GPU_TARGET}" in \
+            gfx110x) WHL_TARGET="gfx110X-all" ;; \
+            gfx120x) WHL_TARGET="gfx120X-all" ;; \
+            *)       WHL_TARGET="${GPU_TARGET}" ;; \
+        esac; \
+    fi && \
     INDEX_URL="${PYTORCH_INDEX_URL:-https://repo.amd.com/rocm/whl/${WHL_TARGET}/}" && \
     TORCH_SUFFIX="+rocm${ROCM_VERSION}" && \
+    echo "Installing ROCm PyTorch from ${INDEX_URL} (GPU_TARGET=${GPU_TARGET}, WHL_TARGET=${WHL_TARGET})" && \
     python3 -m pip install --no-cache-dir \
     --index-url "${INDEX_URL}" \
     "torch==${PYTORCH_VERSION}${TORCH_SUFFIX}" \
@@ -122,12 +144,14 @@ RUN WHL_TARGET="${PYTORCH_WHL_TARGET:-${GPU_TARGET}}" && \
     fi
 
 # Install JupyterHub and related packages
+# jupyterhub must match the Hub image version to ensure singleuser <-> hub
+# protocol compatibility. See runtime/chart/Chart.yaml appVersion.
 RUN pip3 install --no-cache-dir \
-    jupyterhub==4.0.2 \
-    jupyterlab==4.0.9 \
-    notebook==7.0.6 \
-    ipywidgets==8.1.1 \
-    ipykernel==6.27.1 \
+    jupyterhub==5.4.4 \
+    jupyterlab==4.5.6 \
+    notebook==7.5.5 \
+    ipywidgets==8.1.8 \
+    ipykernel==6.31.0 \
     matplotlib \
     uv \
     seaborn \

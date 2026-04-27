@@ -44,7 +44,7 @@ export async function setUserQuota(
 }
 
 export async function batchSetQuota(
-  users: Array<{ username: string; amount: number }>
+  users: Array<{ username: string; amount: number; unlimited?: boolean }>
 ): Promise<{ success: number; failed: number }> {
   return adminApiRequest<{ success: number; failed: number }>("/quota/batch", {
     method: "POST",

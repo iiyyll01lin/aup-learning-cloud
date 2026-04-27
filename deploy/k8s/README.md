@@ -32,18 +32,38 @@ For full instructions, see [Multi-Node Cluster Deployment](https://amdresearch.g
 
 ## Quick Reference
 
+`auplc-installer install` deploys both the AMD GPU device plugin and the ROCm
+node labeller automatically. The labeller publishes labels such as
+`amd.com/gpu.product-name`, `amd.com/gpu.family`, `amd.com/gpu.vram`,
+`amd.com/gpu.cu-count`, `amd.com/gpu.simd-count`, and `amd.com/gpu.device-id`,
+which `runtime/values.yaml` uses as `nodeSelector`s. The installer pins the
+accelerator `nodeSelector` to the real `amd.com/gpu.product-name` detected on
+the host, so no manual labelling is needed on single-machine deployments.
+
+If you are deploying manually instead:
+
 ```bash
 # Deploy AMD GPU device plugin
 kubectl create -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
 
-# Label nodes by GPU type
-kubectl label nodes <NODE_NAME> node-type=strix-halo
+# Deploy AMD GPU node labeller (publishes amd.com/gpu.* labels)
+kubectl create -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/master/k8s-ds-amdgpu-labeller.yaml
 
-# Verify GPU detection
+# Verify GPU detection and labels
 kubectl describe node <node-name> | grep amd.com/gpu
 ```
 
-### Node Label Mapping
+### Legacy `node-type` label (multi-node deployments only)
+
+`runtime/values-multi-nodes.yaml.example` still selects nodes via a custom
+`node-type` label because multi-node admins may want to pin course pods to
+specific hostnames before GPU labels are available. That path is NOT used by
+`auplc-installer`; if you maintain a multi-node cluster with that values
+file, apply the labels with:
+
+```bash
+kubectl label nodes <NODE_NAME> node-type=strix-halo
+```
 
 | node-type     | Hardware |
 |---------------|----------|
@@ -51,3 +71,6 @@ kubectl describe node <node-name> | grep amd.com/gpu
 | `dgpu`        | Discrete GPU (Radeon 9070XT, W9700) |
 | `strix`       | Strix (AMD AI 370 / 350) |
 | `strix-halo`  | Strix-Halo (AMD AI MAX 395) |
+
+See also [`scripts/label-node.sh`](../../scripts/label-node.sh) for a bulk
+labelling example.

@@ -5,6 +5,7 @@ metadata:
   labels:
     {{- include "jupyterhub.labels" . | nindent 4 }}
   annotations:
+    {{- if and .Values.monitoring.enabled .Values.monitoring.hubMetrics.enabled .Values.monitoring.hubMetrics.serviceAnnotations.enabled }}
     {{- if not (index .Values.hub.service.annotations "prometheus.io/scrape") }}
     prometheus.io/scrape: "true"
     {{- end }}
@@ -13,6 +14,7 @@ metadata:
     {{- end }}
     {{- if not (index .Values.hub.service.annotations "prometheus.io/port") }}
     prometheus.io/port: "8081"
+    {{- end }}
     {{- end }}
     {{- with .Values.hub.service.annotations }}
     {{- . | toYaml | nindent 4 }}

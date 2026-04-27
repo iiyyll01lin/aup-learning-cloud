@@ -21,10 +21,12 @@ SOFTWARE.
 
 # AUP Learning Cloud
 
+> **✨ New UI is coming!** 🚀 Try it now on [https://www.openhw.io/](https://www.openhw.io/) 👀
+
+
 AUP Learning Cloud is a tailored JupyterHub deployment designed to provide an intuitive and hands-on AI learning experience. It features a comprehensive suite of AI toolkits running on AMD hardware acceleration, enabling users to learn and experiment with ease.
 
 ![Software Architecture](deploy/docs/images/software-stack.png)
-
 
 ## Quick Start
 
@@ -60,15 +62,20 @@ cd aup-learning-cloud
 sudo ./auplc-installer install
 ```
 After installation completes, open http://localhost:30890 in your browser. No login credentials are required - you will be automatically logged in.
-The installer uses **Docker as the default container runtime** (`K3S_USE_DOCKER=1`), see more at [link](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html#runtime-and-mirror-configuration)
 
+Common options:
+```bash
+sudo ./auplc-installer install --gpu=strix-halo   # specify GPU type
+sudo ./auplc-installer install --docker=0          # use containerd instead of Docker
+sudo ./auplc-installer install --mirror=mirror.example.com  # use registry mirror
+```
+
+See more at [link](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html#runtime-and-mirror-configuration)
 
 ### Uninstall
 ```bash
 sudo ./auplc-installer uninstall
 ```
-
-> **💡 Tip**: For mirror configuration (registries, PyPI, npm), see [Mirror Configuration](deploy/README.md#mirror-configuration).
 
 ## Cluster Installation
 For multi-node cluster installation or need more control over the deployment process:

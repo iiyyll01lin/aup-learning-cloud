@@ -1275,9 +1275,6 @@ properties:
         patternProperties: *labels-and-annotations-patternProperties
         description: |
           K8s annotations for the hub pod.
-      authenticatePrometheus:
-        type: [boolean, "null"]
-        description: *jupyterhub-native-config-description
       concurrentSpawnLimit:
         type: [integer, "null"]
         description: *jupyterhub-native-config-description
@@ -2092,6 +2089,65 @@ properties:
           containerSecurityContext: *containerSecurityContext-spec
           image: *image-spec
           resources: *resources-spec
+
+  monitoring:
+    type: object
+    additionalProperties: false
+    properties:
+      enabled:
+        type: boolean
+        default: false
+      namespace:
+        type: string
+        default: monitoring
+      releaseLabel:
+        type: string
+        default: monitoring
+      hubMetrics:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          allowUnauthenticatedScrape:
+            type: boolean
+            default: true
+          serviceAnnotations:
+            type: object
+            additionalProperties: false
+            properties:
+              enabled:
+                type: boolean
+                default: true
+      serviceMonitor:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          interval:
+            type: string
+            default: 15s
+      grafana:
+        type: object
+        additionalProperties: false
+        properties:
+          dashboard:
+            type: object
+            additionalProperties: false
+            properties:
+              enabled:
+                type: boolean
+                default: false
+      prometheusRule:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+            default: false
 
   singleuser:
     type: object
@@ -3440,6 +3496,37 @@ properties:
               Used as fallback when user provides no PAT and no OAuth token is available.
               Priority: user PAT > OAuth token > defaultAccessToken.
               Helm auto-creates a K8s Secret (jupyterhub-git-default-token) from this value.
+
+      hub:
+        type: object
+        additionalProperties: false
+        description: |
+          Hub-level network settings.
+        properties:
+          allowedOrigins:
+            type: array
+            items:
+              type: string
+            description: |
+              Sets Access-Control-Allow-Origin on Hub HTTP responses.
+              Use when the Hub API is accessed cross-origin.
+              Use ["*"] to allow all, or list specific domains.
+
+      notebook:
+        type: object
+        additionalProperties: false
+        description: |
+          Notebook server network settings.
+        properties:
+          allowedOrigins:
+            type: array
+            items:
+              type: string
+            description: |
+              Injected into each notebook server's startup args via
+              --ServerApp.allow_origin_pat. Needed when kernel WebSocket
+              connections go through a reverse proxy or non-standard domain.
+              Use ["*"] to allow all, or list specific domains.
 
       apiService:
         type: object

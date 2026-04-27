@@ -44,18 +44,42 @@ export function SetPasswordModal({ show, user, onHide }: Props) {
     }
   }, [show]);
 
+  const PASSWORD_RULES = [
+    { test: (pw: string) => pw.length >= 8, label: 'At least 8 characters' },
+    { test: (pw: string) => /[A-Z]/.test(pw), label: 'One uppercase letter' },
+    { test: (pw: string) => /[a-z]/.test(pw), label: 'One lowercase letter' },
+    { test: (pw: string) => /\d/.test(pw), label: 'One digit' },
+    { test: (pw: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(pw), label: 'One special character' },
+  ];
+
+  const allRulesPassed = password.length > 0 && PASSWORD_RULES.every(r => r.test(password));
+
   const generateRandomPassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const special = '!@#$%^&*_+-=';
+    const all = upper + lower + digits + special;
     let result = '';
-    for (let i = 0; i < 16; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += upper[Math.floor(Math.random() * upper.length)];
+    result += lower[Math.floor(Math.random() * lower.length)];
+    result += digits[Math.floor(Math.random() * digits.length)];
+    result += special[Math.floor(Math.random() * special.length)];
+    for (let i = 4; i < 16; i++) {
+      result += all[Math.floor(Math.random() * all.length)];
     }
-    return result;
+    return result.split('').sort(() => Math.random() - 0.5).join('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    const failedRule = PASSWORD_RULES.find(r => !r.test(password));
+    if (failedRule) {
+      setError(`Password requirement not met: ${failedRule.label}`);
+      return;
+    }
 
     setError(null);
     setLoading(true);
@@ -133,9 +157,20 @@ export function SetPasswordModal({ show, user, onHide }: Props) {
                   Generate
                 </Button>
               </InputGroup>
-              <Form.Text className="text-muted">
-                Minimum 8 characters
-              </Form.Text>
+              {password.length > 0 && (
+                <div className="mt-2" style={{ fontSize: '0.8rem' }}>
+                  {PASSWORD_RULES.map((rule, i) => (
+                    <div key={i} style={{ color: rule.test(password) ? 'var(--home-green, #34c759)' : 'var(--home-text-muted, #999)' }}>
+                      {rule.test(password) ? '✓' : '○'} {rule.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {password.length === 0 && (
+                <Form.Text className="text-muted">
+                  Min 8 chars, uppercase, lowercase, digit, and special character
+                </Form.Text>
+              )}
             </Form.Group>
 
             <Form.Group className="mb-3">
@@ -162,7 +197,7 @@ export function SetPasswordModal({ show, user, onHide }: Props) {
             <Button
               variant="dark"
               onClick={handleSubmit}
-              disabled={loading || !password}
+              disabled={loading || !allRulesPassed}
             >
               {loading ? (
                 <>

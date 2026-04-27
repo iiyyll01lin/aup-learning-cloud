@@ -151,15 +151,41 @@ export async function setPassword(
   });
 }
 
+export async function batchSetPasswords(
+  users: Array<{ username: string; password: string }>,
+  force_change = true
+): Promise<{ success: number; failed: number; results: Array<{ username: string; status: string; error?: string }> }> {
+  return adminApiRequest("/batch-set-password", {
+    method: "POST",
+    body: JSON.stringify({ users, force_change }),
+  });
+}
+
 export async function generatePassword(): Promise<{ password: string }> {
   return adminApiRequest<{ password: string }>("/generate-password", {
     method: "GET",
   });
 }
 
-export async function getGroups(): Promise<Group[]> {
-  const response = await apiRequest<Record<string, Group>>("/groups");
-  return Object.values(response);
+export interface GroupsResponse {
+  groups: Group[];
+  github_org: string;
+}
+
+export async function getGroups(): Promise<GroupsResponse> {
+  return adminApiRequest<GroupsResponse>("/groups");
+}
+
+export interface SyncGroupsResponse {
+  synced: number;
+  failed: number;
+  skipped: number;
+}
+
+export async function syncGroups(): Promise<SyncGroupsResponse> {
+  return adminApiRequest<SyncGroupsResponse>("/groups/sync", {
+    method: "POST",
+  });
 }
 
 export async function getGroup(groupName: string): Promise<Group> {
@@ -173,16 +199,16 @@ export async function createGroup(groupName: string): Promise<Group> {
 }
 
 export async function deleteGroup(groupName: string): Promise<void> {
-  return apiRequest<void>(`/groups/${encodeURIComponent(groupName)}`, {
+  return adminApiRequest<void>(`/groups/${encodeURIComponent(groupName)}`, {
     method: "DELETE",
   });
 }
 
 export async function updateGroup(
   groupName: string,
-  data: { properties?: Record<string, unknown> }
+  data: { properties?: Record<string, unknown>; release_protection?: boolean }
 ): Promise<Group> {
-  return apiRequest<Group>(`/groups/${encodeURIComponent(groupName)}`, {
+  return adminApiRequest<Group>(`/groups/${encodeURIComponent(groupName)}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -192,7 +218,7 @@ export async function addUserToGroup(
   groupName: string,
   username: string
 ): Promise<Group> {
-  return apiRequest<Group>(`/groups/${encodeURIComponent(groupName)}/users`, {
+  return adminApiRequest<Group>(`/groups/${encodeURIComponent(groupName)}/users`, {
     method: "POST",
     body: JSON.stringify({ users: [username] }),
   });
@@ -202,7 +228,7 @@ export async function removeUserFromGroup(
   groupName: string,
   username: string
 ): Promise<Group> {
-  return apiRequest<Group>(`/groups/${encodeURIComponent(groupName)}/users`, {
+  return adminApiRequest<Group>(`/groups/${encodeURIComponent(groupName)}/users`, {
     method: "DELETE",
     body: JSON.stringify({ users: [username] }),
   });

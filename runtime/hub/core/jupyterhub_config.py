@@ -84,7 +84,58 @@ c.ConfigurableHTTPProxy.should_start = False
 # Hub settings
 c.JupyterHub.cleanup_servers = False
 c.JupyterHub.last_activity_interval = 60
-c.JupyterHub.tornado_settings = {"slow_spawn_timeout": 0}
+
+# Base tornado settings — always applied.
+# Security note: 'unsafe-inline' is required because JupyterHub injects inline
+# scripts (e.g. darkmode observer) and Cloudflare Bot Fight also injects inline
+# JS that cannot be predicted ahead of time. Removing 'unsafe-inline' would
+# require nonce support coordinated across Hub and Cloudflare, tracked as a
+# future hardening task. This policy still prevents loading scripts/resources
+# from arbitrary external origins, which is the primary CSP risk.
+_BASE_TORNADO_SETTINGS: dict = {
+    "slow_spawn_timeout": 0,
+    "headers": {
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "frame-ancestors 'none'; "
+            "report-uri /hub/security/csp-report"
+        ),
+        # Platform attribution — survives frontend rewrites because it is set
+        # at the Tornado application layer, not in any template or React component.
+        "X-Powered-By": "AUP Learning Cloud",
+    },
+}
+
+# Hub allowed origins: merge CORS header into tornado_settings without clobbering.
+_hub_config = HubConfig.get()
+_hub_allowed_origins = _hub_config.hub_network.allowedOrigins
+if _hub_allowed_origins:
+    _origin_val = "*" if "*" in _hub_allowed_origins else ", ".join(_hub_allowed_origins)
+    _BASE_TORNADO_SETTINGS.setdefault("headers", {})["Access-Control-Allow-Origin"] = _origin_val
+    print(f"[CONFIG] Hub allowedOrigins: {_hub_allowed_origins}")
+
+c.JupyterHub.tornado_settings = _BASE_TORNADO_SETTINGS
+
+# Harden _xsrf session cookie via Tornado's xsrf_cookie_kwargs.
+# JupyterHub.cookie_options only affects Hub session cookies; the _xsrf cookie
+# is managed directly by Tornado and requires xsrf_cookie_kwargs in
+# tornado_settings to set Secure and SameSite.
+# - Secure: safe because HSTS is enforced site-wide via Cloudflare.
+# - SameSite=Lax: blocks cross-site POST CSRF while allowing OAuth top-level redirects.
+# - HttpOnly is intentionally omitted: JupyterHub's frontend JS must read _xsrf
+#   to include it in form submissions.
+c.JupyterHub.tornado_settings = {
+    **c.JupyterHub.tornado_settings,
+    "xsrf_cookie_kwargs": {"secure": True, "samesite": "Lax"},
+}
+
+# Inject platform identity into every Jinja template context so that
+# {{ powered_by }} is available in all Hub-rendered pages.
+c.JupyterHub.template_vars = {"powered_by": "AUP Learning Cloud"}
 
 # Database configuration
 db_type = z2jh.get_config("hub.db.type")
@@ -109,7 +160,6 @@ for trait, cfg_key in (
     ("base_url", None),
     ("allow_named_servers", None),
     ("named_server_limit_per_user", None),
-    ("authenticate_prometheus", None),
     ("redirect_to_server", None),
     ("shutdown_on_logout", None),
     ("template_vars", None),
@@ -126,6 +176,13 @@ for trait, cfg_key in (
             c.JupyterHub.template_vars.update(value)
     else:
         z2jh.set_config_if_not_none(c.JupyterHub, trait, "hub." + cfg_key)
+
+# Optional Prometheus metrics access
+metrics_enabled = z2jh.get_config("monitoring.hubMetrics.enabled", False)
+allow_unauthenticated_metrics = z2jh.get_config("monitoring.hubMetrics.allowUnauthenticatedScrape", True)
+
+if metrics_enabled and allow_unauthenticated_metrics:
+    c.JupyterHub.authenticate_prometheus = False
 
 # Hub bind and connect URLs
 hub_container_port = 8081

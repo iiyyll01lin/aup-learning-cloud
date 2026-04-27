@@ -59,6 +59,17 @@ custom:
   teams:
     mapping: {}
 
+  # Hub-level allowed origins: sets Access-Control-Allow-Origin on Hub HTTP
+  # responses. Useful when the Hub API is accessed cross-origin.
+  hub:
+    allowedOrigins: []
+
+  # Notebook server allowed origins: injected into each notebook server's
+  # startup args via --ServerApp.allow_origin_pat.
+  # Needed when kernel WebSocket connections go through a reverse proxy.
+  notebook:
+    allowedOrigins: []
+
   # User quota management system
   quota:
     # Enable/disable quota system (auto-disabled for auto-login/dummy modes if not set)
@@ -162,7 +173,7 @@ hub:
   extraVolumeMounts: []
   image:
     name: quay.io/jupyterhub/k8s-hub
-    tag: "4.1.0"
+    tag: "4.3.3"
     pullPolicy:
     pullSecrets: []
   resources: {}
@@ -202,7 +213,6 @@ hub:
     allowedIngressPorts: []
   allowNamedServers: false
   namedServerLimitPerUser:
-  authenticatePrometheus:
   redirectToServer:
   shutdownOnLogout:
   templatePaths: []
@@ -299,7 +309,7 @@ proxy:
       # tag is automatically bumped to new patch versions by the
       # watch-dependencies.yaml workflow.
       #
-      tag: "4.6.3" # https://github.com/jupyterhub/configurable-http-proxy/tags
+      tag: "5.2.0" # https://github.com/jupyterhub/configurable-http-proxy/tags
       pullPolicy:
       pullSecrets: []
     extraCommandLineFlags: []
@@ -357,7 +367,7 @@ proxy:
       # tag is automatically bumped to new patch versions by the
       # watch-dependencies.yaml workflow.
       #
-      tag: "v3.3.1" # ref: https://hub.docker.com/_/traefik?tab=tags
+      tag: "v3.6.12" # ref: https://hub.docker.com/_/traefik?tab=tags
       pullPolicy:
       pullSecrets: []
     hsts:
@@ -409,7 +419,7 @@ proxy:
         type: "RuntimeDefault"
     image:
       name: quay.io/jupyterhub/k8s-secret-sync
-      tag: "4.1.0"
+      tag: "4.3.3"
       pullPolicy:
       pullSecrets: []
     resources: {}
@@ -449,7 +459,7 @@ singleuser:
   networkTools:
     image:
       name: quay.io/jupyterhub/k8s-network-tools
-      tag: "4.1.0"
+      tag: "4.3.3"
       pullPolicy:
       pullSecrets: []
     resources: {}
@@ -502,7 +512,7 @@ singleuser:
       subPath:
   image:
     name: quay.io/jupyterhub/k8s-singleuser-sample
-    tag: "4.1.0"
+    tag: "4.3.3"
     pullPolicy:
     pullSecrets: []
   startTimeout: 300
@@ -634,7 +644,7 @@ scheduling:
       # here. We aim to stay around 1 minor version behind the latest k8s
       # version.
       #
-      tag: "v1.30.8" # ref: https://github.com/kubernetes/kubernetes/tree/master/CHANGELOG
+      tag: "v1.30.14" # ref: https://github.com/kubernetes/kubernetes/tree/master/CHANGELOG
       pullPolicy:
       pullSecrets: []
     nodeSelector: {}
@@ -666,7 +676,7 @@ scheduling:
       #
       # If you update this, also update prePuller.pause.image.tag
       #
-      tag: "3.10"
+      tag: "3.10.1"
       pullPolicy:
       pullSecrets: []
     revisionHistoryLimit:
@@ -732,7 +742,7 @@ prePuller:
     # image and the configuration below relates to the hook-image-awaiter Job
     image:
       name: quay.io/jupyterhub/k8s-image-awaiter
-      tag: "4.1.0"
+      tag: "4.3.3"
       pullPolicy:
       pullSecrets: []
     containerSecurityContext:
@@ -783,7 +793,7 @@ prePuller:
       #
       # If you update this, also update scheduling.userPlaceholder.image.tag
       #
-      tag: "3.10"
+      tag: "3.10.1"
       pullPolicy:
       pullSecrets: []
 

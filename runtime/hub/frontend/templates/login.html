@@ -35,9 +35,21 @@ SOFTWARE.
 AUP Learning Cloud
 {%- endblock title -%}
 
+{% block stylesheet %}
+{{ super() }}
+<link rel="stylesheet"
+      href="{{ static_url('css/login.min.css') }}"
+      type="text/css" />
+{% endblock stylesheet %}
+
 {% block scripts %}
-<script src="https://cdn.tailwindcss.com" type="text/javascript" charset="utf-8"></script>
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+{# Inherit same-origin scripts (jQuery, Bootstrap bundle, darkmode.js)
+   from page.html. Previously this block replaced the parent entirely
+   and pulled Tailwind + jQuery from public CDNs, which introduced a
+   third-party supply-chain risk without SRI and relied on Tailwind's
+   browser-side JIT compiler (cdn.tailwindcss.com) which is explicitly
+   not meant for production. #}
+{{ super() }}
 {% endblock scripts %}
 
 {% block require_config %}
@@ -90,20 +102,20 @@ AUP Learning Cloud
     <div class="w-full md:w-3/5 flex items-center justify-center p-6 md:p-16">
         <div class="w-full max-w-md">
             {% block login_container %}
-            <div id="announcement-box" class="bg-yellow-100 text-yellow-800 border border-yellow-300 p-4 mb-6 rounded hidden">
-                Now loading external announcement...
-            </div>
+            <div id="announcement-box" class="bg-blue-50 text-blue-900 border border-blue-200 p-4 mb-6 rounded-lg hidden"></div>
             
             <script>
-                fetch("/hub/static/announcement.txt")
+                fetch("{{ static_url('announcement.txt') }}")
                     .then(resp => {
                         if (!resp.ok) throw new Error("Not found");
                         return resp.text();
                     })
                     .then(data => {
-                        const box = document.getElementById("announcement-box");
-                        box.innerHTML = data;
-                        box.classList.remove("hidden");
+                        if (data && data.trim()) {
+                            const box = document.getElementById("announcement-box");
+                            box.innerHTML = data;
+                            box.classList.remove("hidden");
+                        }
                     })
                     .catch(err => {
                         console.warn("External announcement.txt load fail", err);

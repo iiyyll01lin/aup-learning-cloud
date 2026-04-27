@@ -55,6 +55,20 @@ custom:
     enabled: false
 
   # ============================================================================
+  # Allowed Origins
+  # ============================================================================
+  # hub.allowedOrigins      — sets Access-Control-Allow-Origin on Hub HTTP responses
+  # notebook.allowedOrigins — injected into each notebook server's startup args
+  #                           (--ServerApp.allow_origin_pat); handles kernel WebSocket
+  #
+  # Use ["*"] to allow all, or list specific domains.
+  # Example: ["https://mylab.example.com", "https://alt.example.org"]
+  hub:
+    allowedOrigins: []
+  notebook:
+    allowedOrigins: []
+
+  # ============================================================================
   # Git Repository Cloning
   # ============================================================================
   # Users can provide an optional Git URL on the spawn form; the repo will be
@@ -118,38 +132,45 @@ custom:
       displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
       description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
       nodeSelector:
-        node-type: phx
+        amd.com/gpu.product-name: "AMD_Radeon_780M_Graphics"
       env:
+        # Phoenix hw (gfx1100/1101/1102/1103) shares a single gfx110x ROCm
+        # build — we do not ship dedicated images for gfx1102/gfx1103 — so
+        # force every Phoenix GPU to report as gfx1100 at runtime so it
+        # accepts the shared kernels.
         HSA_OVERRIDE_GFX_VERSION: "11.0.0"
       quotaRate: 2
     strix:
       displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
       description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
       nodeSelector:
-        node-type: strix
+        amd.com/gpu.product-name: "AMD_Radeon_890M_Graphics"
       env: {}
       quotaRate: 2
     strix-halo:
       displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
       description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
       nodeSelector:
-        node-type: strix-halo
+        amd.com/gpu.product-name: "AMD_Radeon_8060S_Graphics"
       env: {}
       quotaRate: 3
-    dgpu:
-      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
+    9070xt:
+      displayName: "AMD Radeon™ RX 9070 XT (Desktop GPU)"
       description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
+      # ROCm labeller publishes the marketing name with spaces → '_', so the
+      # expected value on a real node is AMD_Radeon_RX_9070_XT. If your fleet
+      # uses the older AMD_Radeon_9070XT normalisation, change it here.
       nodeSelector:
-        node-type: dgpu
+        amd.com/gpu.product-name: "AMD_Radeon_RX_9070_XT"
       env: {}
       quotaRate: 4
-    strix-npu:
-      displayName: "AMD XDNA2 (Strix Point NPU)"
-      description: "AMD XDNA2 NPU with AI acceleration"
+    r9700:
+      displayName: "AMD Radeon™ AI Pro R9700 (Workstation GPU)"
+      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 32GB GDDR6"
       nodeSelector:
-        type: strix
+        amd.com/gpu.product-name: "AMD_Radeon_AI_PRO_R9700"
       env: {}
-      quotaRate: 1
+      quotaRate: 4
 
   # ============================================================================
   # Course Resources Configuration
@@ -170,43 +191,31 @@ custom:
     # Define resource quotas for each course
     requirements:
       cpu:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
+        cpu: "0"
+        memory: "0Gi"
       gpu:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-CV:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-DL:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-LLM:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-PhySim:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
-      # Custom-URL:
-      #   cpu: "4"
-      #   memory: "16Gi"
-      #   memory_limit: "24Gi"
-      #   amd.com/gpu: "1"
       none:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
+        cpu: "0"
+        memory: "0Gi"
 
     # Course Metadata (for spawn UI)
     # Defines display information for each course
@@ -289,6 +298,16 @@ custom:
         - Course-CV
         - Course-DL
         - Course-LLM
+        - Course-PhySim
+        - cpu
+        - gpu
+      github-users:
+        - cpu
+        - gpu
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
 
   # ============================================================================
   # Quota Management
@@ -326,23 +345,14 @@ hub:
     # If you want to edit the notice on login.html, change here.
       mountPath: /usr/local/share/jupyterhub/static/announcement.txt
       stringData: |
-          <div class="announcement-box" style="padding: 1em; border: 1px solid #ccc; border-radius: 6px; background-color: #f8f8f8;">
-          <h3>Welcome to AUP Learning Cloud!</h3>
-          <p>This is a <strong>dynamic announcement</strong>.</p>
-          <p>My location is on <code>runtime/values.yaml</code></p>
-          <p>You can edit this via <strong>ConfigMap</strong> without rebuilding the image.</p>
-          </div>
+          Hello, World!
 
   config:
     # ---- Hub Core ----
-    # JupyterHub:
-      # Enable JupyterHub REST API
-      # API Documentation: https://jupyterhub.readthedocs.io/en/stable/reference/rest-api.html
-      # api_tokens:
-      #   Configure API tokens for external services
-      #   Format: token: username
-      #   It's recommended to use environment variables or secrets to manage tokens
-      #   Example: "your-secure-api-token-here": "admin-service"
+    JupyterHub:
+      # Always show Home page first, even when a server is already running.
+      # Users can access their running server via the "My Server" button on Home.
+      redirect_to_server: false
 
     Authenticator:
       allow_all: true
@@ -362,7 +372,40 @@ hub:
     KubeSpawner:
       image_pull_policy: IfNotPresent
 
+monitoring:
+  enabled: false
+  namespace: monitoring
+  releaseLabel: monitoring
+
+  hubMetrics:
+    enabled: false
+    # Disable JupyterHub read:metrics scope requirement so in-cluster
+    # Prometheus can scrape /hub/metrics without authentication.
+    allowUnauthenticatedScrape: true
+    serviceAnnotations:
+      enabled: true
+
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+
+  grafana:
+    dashboard:
+      enabled: false
+
+  prometheusRule:
+    enabled: false
+
 singleuser:
+  # Security context for user pods to access GPU devices
+  # supplementalGroups grants container access to host's render group (GID 993)
+  # This allows non-root users to access /dev/kfd and /dev/dri devices
+  extraPodConfig:
+    securityContext:
+      fsGroup: 100
+      supplementalGroups:
+        - 993  # render group for ROCm GPU access
+
   storage:
     dynamic:
       storageClass: local-path

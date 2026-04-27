@@ -37,15 +37,13 @@ SOFTWARE.
 <div class="container">
   <form enctype="multipart/form-data" id="spawn_form" action="{{url}}" method="post" role="form">
     <div id="spawn-root"></div>
+    {{ spawner_options_form | safe }}
     <script>
       window.jhdata = {
         base_url: '{{ base_url }}',
         xsrf_token: '{{ xsrf_token }}',
         user: '{{ user.name }}'
       };
-      {% if spawner_options %}
-      window.AVAILABLE_RESOURCES = {{ spawner_options | tojson }};
-      {% endif %}
     </script>
     <script type="module" src="{{ static_url('spawn-ui/assets/index.js') }}"></script>
   </form>

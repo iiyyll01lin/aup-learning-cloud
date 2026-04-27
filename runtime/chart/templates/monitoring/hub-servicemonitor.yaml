@@ -1,0 +1,20 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.hubMetrics.enabled .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hub-metrics
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+    release: {{ .Values.monitoring.releaseLabel }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      component: hub
+  endpoints:
+    - targetPort: 8081
+      path: {{ .Values.hub.baseUrl | trimSuffix "/" }}/hub/metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- end }}

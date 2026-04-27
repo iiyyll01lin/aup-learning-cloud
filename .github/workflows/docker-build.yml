@@ -62,7 +62,9 @@ on:
         options:
           - all
           - gfx110x
+          - gfx1150
           - gfx1151
+          - gfx120x
 
 # Build matrix is defined in .github/build-config.json
 
@@ -93,12 +95,32 @@ jobs:
       gpu-map: ${{ steps.config.outputs.gpu-map }}
       default-gpu-target: ${{ steps.config.outputs.default }}
       course-list: ${{ steps.config.outputs.courses }}
+      image-name-suffix: ${{ steps.names.outputs.suffix }}
+      hub-image: ${{ steps.names.outputs.hub }}
+      base-cpu-image: ${{ steps.names.outputs.base-cpu }}
+      base-gpu-image: ${{ steps.names.outputs.base-gpu }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set registry prefix
         id: registry
         run: echo "prefix=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve image names
+        id: names
+        env:
+          # Repo-level variable. Leave unset in upstream (public) repo → "" → names
+          # stay as auplc-base / auplc-cv / … Set to e.g. "-dev" in a fork so every
+          # published image (and the BASE_IMAGE consumed by course builds) flips to
+          # auplc-base-dev / auplc-cv-dev / …  Keeps forks from colliding with
+          # upstream packages and lets dev branches self-reference their own base.
+          SUFFIX: ${{ vars.IMAGE_NAME_SUFFIX }}
+          REGISTRY: ${{ steps.registry.outputs.prefix }}
+        run: |
+          echo "suffix=${SUFFIX}"        >> "$GITHUB_OUTPUT"
+          echo "hub=${REGISTRY}/auplc-hub${SUFFIX}"         >> "$GITHUB_OUTPUT"
+          echo "base-cpu=${REGISTRY}/auplc-default${SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "base-gpu=${REGISTRY}/auplc-base${SUFFIX}"    >> "$GITHUB_OUTPUT"
 
       - name: Check if tag push
         id: check
@@ -175,7 +197,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ needs.changes.outputs.registry }}/auplc-hub
+          images: ${{ needs.changes.outputs.hub-image }}
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
@@ -228,7 +250,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ needs.changes.outputs.registry }}/auplc-default
+          images: ${{ needs.changes.outputs.base-cpu-image }}
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
@@ -308,7 +330,7 @@ jobs:
         id: meta-suffixed
         uses: docker/metadata-action@v5
         with:
-          images: ${{ needs.changes.outputs.registry }}/auplc-base
+          images: ${{ needs.changes.outputs.base-gpu-image }}
           flavor: |
             suffix=-${{ steps.suffix.outputs.tag_suffix }}
           tags: |
@@ -319,6 +341,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Docker metadata (unsuffixed tags — default target only)
@@ -326,7 +349,7 @@ jobs:
         id: meta-default
         uses: docker/metadata-action@v5
         with:
-          images: ${{ needs.changes.outputs.registry }}/auplc-base
+          images: ${{ needs.changes.outputs.base-gpu-image }}
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
@@ -335,6 +358,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Merge tags
@@ -422,8 +446,11 @@ jobs:
 
       - name: Derive image name and tag suffix
         id: meta-inputs
+        env:
+          NAME_SUFFIX: ${{ needs.changes.outputs.image-name-suffix }}
         run: |
-          echo "image_name=auplc-$(echo '${{ matrix.course }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          COURSE_LC=$(echo '${{ matrix.course }}' | tr '[:upper:]' '[:lower:]')
+          echo "image_name=auplc-${COURSE_LC}${NAME_SUFFIX}" >> "$GITHUB_OUTPUT"
           echo "tag_suffix=${{ matrix.gpu_target }}" >> "$GITHUB_OUTPUT"
 
       - name: Determine base image tag
@@ -438,7 +465,10 @@ jobs:
           else
             BRANCH=$(echo "${GITHUB_REF##refs/heads/}" | tr '/' '-')
           fi
-          echo "image=${{ needs.changes.outputs.registry }}/auplc-base:${BRANCH}-${SUFFIX}" >> "$GITHUB_OUTPUT"
+          # Pull the base image from THIS repo's package (auplc-base or auplc-base-dev)
+          # at the tag built by this same workflow run for the current branch —
+          # never fall back to upstream auplc-base.
+          echo "image=${{ needs.changes.outputs.base-gpu-image }}:${BRANCH}-${SUFFIX}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -455,6 +485,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Docker metadata (unsuffixed tags — default target only)
@@ -471,6 +502,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
             type=sha,prefix=sha-
             type=ref,event=branch
+            type=ref,event=tag
             type=ref,event=pr
 
       - name: Merge tags
