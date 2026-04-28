@@ -38,4 +38,11 @@ spec:
     - targetPort: 8081
       path: {{ .Values.hub.baseUrl | trimSuffix "/" }}/hub/metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      {{- if .Values.monitoring.serviceMonitor.authorization.enabled }}
+      authorization:
+        type: {{ .Values.monitoring.serviceMonitor.authorization.type | quote }}
+        credentials:
+          name: {{ .Values.monitoring.serviceMonitor.authorization.secret.name | default (printf "%s-metrics-token" (include "jupyterhub.hub.fullname" .)) | quote }}
+          key: {{ .Values.monitoring.serviceMonitor.authorization.secret.key | quote }}
+      {{- end }}
 {{- end }}
