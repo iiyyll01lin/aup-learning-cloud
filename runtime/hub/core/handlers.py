@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
@@ -73,6 +74,42 @@ _handler_config: dict[str, Any] = {
 }
 
 
+def _serialize_dismissed_at(value: datetime | None) -> str | None:
+    """Serialize onboarding dismissal timestamps for API responses."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
+def _get_onboarding_state(username: str) -> datetime | None:
+    """Fetch onboarding dismissal time for a username."""
+    from core.authenticators.models import UserOnboardingState
+    from core.database import session_scope
+
+    with session_scope() as db:
+        state = db.query(UserOnboardingState).filter_by(username=username).first()
+        return state.dismissed_at if state is not None else None
+
+
+def _dismiss_onboarding(username: str) -> str:
+    """Persist dismissal state for a username."""
+    from core.authenticators.models import UserOnboardingState
+    from core.database import session_scope
+
+    dismissed_at = datetime.now(timezone.utc)
+
+    with session_scope() as db:
+        state = db.query(UserOnboardingState).filter_by(username=username).first()
+        if state is None:
+            state = UserOnboardingState(username=username)
+            db.add(state)
+        state.dismissed_at = dismissed_at
+
+    return _serialize_dismissed_at(dismissed_at) or ""
+
+
 def configure_handlers(
     accelerator_options: dict[str, Any] | None = None,
     quota_rates: dict[str, int] | None = None,
@@ -93,6 +130,52 @@ def configure_handlers(
     if team_resource_mapping is not None:
         _handler_config["team_resource_mapping"] = team_resource_mapping
     _handler_config["github_org"] = github_org
+
+
+
+# =============================================================================
+# Onboarding Handlers
+# =============================================================================
+
+
+class GetMyOnboardingHandler(APIHandler):
+    """Return onboarding visibility for the current user."""
+
+    @web.authenticated
+    async def get(self):
+        assert self.current_user is not None
+
+        dismissed_at = _get_onboarding_state(self.current_user.name)
+
+        self.set_header("Content-Type", "application/json")
+        self.finish(
+            json.dumps(
+                {
+                    "should_show": dismissed_at is None,
+                    "dismissed_at": _serialize_dismissed_at(dismissed_at),
+                }
+            )
+        )
+
+
+class DismissMyOnboardingHandler(APIHandler):
+    """Persist onboarding dismissal for the current user."""
+
+    @web.authenticated
+    async def post(self):
+        assert self.current_user is not None
+
+        dismissed_at = _dismiss_onboarding(self.current_user.name)
+
+        self.set_header("Content-Type", "application/json")
+        self.finish(
+            json.dumps(
+                {
+                    "should_show": False,
+                    "dismissed_at": dismissed_at,
+                }
+            )
+        )
 
 
 # =============================================================================
@@ -1506,6 +1589,9 @@ def get_handlers() -> list[tuple[str, type]]:
     return [
         # Platform identity (unauthenticated — always accessible)
         (r"/api/platform", PlatformInfoHandler),
+        # Onboarding API
+        (r"/api/onboarding/me", GetMyOnboardingHandler),
+        (r"/api/onboarding/dismiss", DismissMyOnboardingHandler),
         # Password management
         (r"/auth/change-password", ChangePasswordHandler),
         (r"/auth/check-force-password-change", CheckForcePasswordChangeHandler),
@@ -1555,6 +1641,9 @@ def get_handlers() -> list[tuple[str, type]]:
 __all__ = [
     # Platform identity
     "PlatformInfoHandler",
+    # Onboarding handlers
+    "GetMyOnboardingHandler",
+    "DismissMyOnboardingHandler",
     # Password handlers
     "CheckForcePasswordChangeHandler",
     "ChangePasswordHandler",
