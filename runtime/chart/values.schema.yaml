@@ -2131,14 +2131,14 @@ properties:
             default: false
           allowUnauthenticatedScrape:
             type: boolean
-            default: true
+            default: false
           serviceAnnotations:
             type: object
             additionalProperties: false
             properties:
               enabled:
                 type: boolean
-                default: true
+                default: false
       serviceMonitor:
         type: object
         additionalProperties: false
@@ -2149,6 +2149,34 @@ properties:
           interval:
             type: string
             default: 15s
+          authorization:
+            type: object
+            additionalProperties: false
+            properties:
+              enabled:
+                type: boolean
+                default: true
+              type:
+                type: string
+                default: Bearer
+              hubServiceName:
+                type: string
+                minLength: 1
+                default: prometheus-metrics
+              secret:
+                type: object
+                additionalProperties: false
+                properties:
+                  create:
+                    type: boolean
+                    default: true
+                  name:
+                    type: string
+                    default: ""
+                  key:
+                    type: string
+                    minLength: 1
+                    default: token
       grafana:
         type: object
         additionalProperties: false
