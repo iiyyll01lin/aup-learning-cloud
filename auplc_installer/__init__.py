@@ -5,10 +5,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,25 +17,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""auplc-installer: Python implementation of the AUP Learning Cloud installer.
 
-# Build as jupyterhub/singleuser
-# Run with the DockerSpawner in JupyterHub
+Drop-in replacement for the legacy bash ``auplc-installer`` script. Same CLI
+surface (subcommands, flags, environment variables) so existing automation,
+GitHub Actions workflows and offline bundles keep working unchanged.
+"""
 
-# Pin to the python-3.12 stream of jupyter/docker-stacks so pre-pulled images
-# (auplc_installer/images.py BUILD_ONLY_IMAGES) match this build's FROM.
-ARG BASE_IMAGE=quay.io/jupyter/base-notebook:python-3.12
-FROM $BASE_IMAGE
-LABEL maintainer="Jupyter Project <jupyter@googlegroups.com>"
-
-# Align jupyterhub package with the Hub image version (runtime/chart/Chart.yaml
-# appVersion) so the singleuser <-> hub protocol stays in sync.
-ARG JUPYTERHUB_VERSION="5.4.4"
-ARG PIP_INDEX_URL=
-
-# Set pip index URL if specified
-RUN if [ -n "${PIP_INDEX_URL}" ]; then pip config set global.index-url "${PIP_INDEX_URL}"; fi
-
-RUN if [ -n "$JUPYTERHUB_VERSION" ]; then python3 -mpip install --no-cache --upgrade --upgrade-strategy only-if-needed jupyterhub=="$JUPYTERHUB_VERSION"; fi
-
-# Install server timer extension (displays remaining time in JupyterLab status bar)
-RUN pip install --no-cache-dir jupyterlab-server-timer
+__version__ = "0.2.0"
