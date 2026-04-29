@@ -40,6 +40,9 @@ The simplest way to deploy AUP Learning Cloud on a single machine in a developme
 - **Docker**: Install Docker and configure for non-root access
 
 ```bash
+# Install the OEM kernel for AMD Ryzen-series APU ROCm support (reboot required)
+sudo apt update && sudo apt install linux-image-6.14.0-1018-oem
+
 # Install Docker
 curl -fsSL https://get.docker.com | sh
 
@@ -53,7 +56,9 @@ newgrp docker
 sudo apt install build-essential
 ```
 
-> **Note**: See [Docker Post-installation Steps](https://docs.docker.com/engine/install/linux-postinstall/) and [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for details.
+> **Kernel note**: The OEM kernel package follows AMD ROCm's Ryzen APU installation guidance for Ubuntu 24.04. See the [ROCm installation guide for Ryzen APUs](https://rocm.docs.amd.com/en/7.12.0-preview/install/rocm.html?fam=ryzen&gpu=max-pro-395&os=ubuntu&os-version=24.04&i=pkgman) for details.
+>
+> **Docker note**: See [Docker Post-installation Steps](https://docs.docker.com/engine/install/linux-postinstall/) and [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for details.
 
 ### Installation
 ```bash
