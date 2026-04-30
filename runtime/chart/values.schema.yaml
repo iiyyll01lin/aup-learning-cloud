@@ -3233,9 +3233,9 @@ properties:
               displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
               description: "RDNA 3.5 | 16 CUs | 4GB LPDDR5X"
               nodeSelector:
-                node-type: strix
+                amd.com/gpu.product-name: "AMD_Radeon_890M_Graphics"
               env:
-                HSA_OVERRIDE_GFX_VERSION: "11.5.0"
+                HSA_OVERRIDE_GFX_VERSION: "11.0.0"
               quotaRate: 2
           ```
 

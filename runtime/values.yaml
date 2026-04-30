@@ -255,7 +255,7 @@ custom:
         acceleratorKeys:
           - strix-halo
         # acceleratorOverrides: (optional) per-accelerator image and env overrides
-        #   dgpu:
+        #   9070xt:
         #     image: "ghcr.io/amdresearch/auplc-cv:v1.0-rocm-gfx120X"
         #     env:
         #       HSA_OVERRIDE_GFX_VERSION: "11.0.0"
