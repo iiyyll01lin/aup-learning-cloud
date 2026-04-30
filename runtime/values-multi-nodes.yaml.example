@@ -23,7 +23,7 @@
 #   cp values-multi-nodes.yaml.example values-multi-nodes.yaml
 #
 # Deploy with:
-#   helm install jupyterhub ./chart -n jupyterhub --create-namespace \
+#   helm upgrade --install jupyterhub ./chart -n jupyterhub --create-namespace \
 #     -f values-multi-nodes.yaml
 
 # ============================================================================
@@ -59,6 +59,24 @@ custom:
     enabled: false
 
   # --------------------------------------------------------------------------
+  # Allowed Origins
+  # --------------------------------------------------------------------------
+  # hub.allowedOrigins      — sets Access-Control-Allow-Origin on Hub responses
+  # notebook.allowedOrigins — passed to notebook servers as
+  #                            --ServerApp.allow_origin_pat for WebSocket access
+  hub:
+    allowedOrigins: []
+  notebook:
+    allowedOrigins: []
+
+  # --------------------------------------------------------------------------
+  # Public Scheme (TLS terminated outside the chart)
+  # --------------------------------------------------------------------------
+  # Uncomment when HTTPS is terminated by an external ingress or load balancer.
+  # security:
+  #   publicScheme: "https"
+
+  # --------------------------------------------------------------------------
   # Git Repository Cloning
   # --------------------------------------------------------------------------
   # Users can provide an optional Git URL on the spawn form; the repo will be
@@ -82,90 +100,94 @@ custom:
   # --------------------------------------------------------------------------
   # Accelerator Configuration
   # --------------------------------------------------------------------------
+  # Define available GPU node types for the spawn UI.
+  # These selectors follow runtime/values.yaml and use the ROCm node labeller's
+  # amd.com/gpu.product-name labels.
   accelerators:
     phx:
       displayName: "AMD Radeon™ 780M (Phoenix Point iGPU)"
       description: "RDNA 3.0 (gfx1103) | Compute Units 12 | 4GB LPDDR5X"
       nodeSelector:
-        node-type: phx
+        amd.com/gpu.product-name: "AMD_Radeon_780M_Graphics"
       env:
+        # Phoenix hw (gfx1100/1101/1102/1103) shares a single gfx110x ROCm
+        # build — we do not ship dedicated images for gfx1102/gfx1103 — so
+        # force every Phoenix GPU to report as gfx1100 at runtime so it
+        # accepts the shared kernels.
         HSA_OVERRIDE_GFX_VERSION: "11.0.0"
       quotaRate: 2
     strix:
       displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
       description: "RDNA 3.5 (gfx1150) | Compute Units 16 | 4GB LPDDR5X"
       nodeSelector:
-        node-type: strix
+        amd.com/gpu.product-name: "AMD_Radeon_890M_Graphics"
       env: {}
       quotaRate: 2
     strix-halo:
       displayName: "AMD Radeon™ 8060S (Strix Halo iGPU)"
       description: "RDNA 3.5 (gfx1151) | Compute Units 40 | 64GB LPDDR5X"
       nodeSelector:
-        node-type: strix-halo
+        amd.com/gpu.product-name: "AMD_Radeon_8060S_Graphics"
       env: {}
       quotaRate: 3
-    dgpu:
-      displayName: "AMD Radeon™ 9070XT (Desktop GPU)"
+    9070xt:
+      displayName: "AMD Radeon™ RX 9070 XT (Desktop GPU)"
       description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 16GB GDDR6"
+      # ROCm labeller publishes the marketing name with spaces -> '_', so the
+      # expected value on a real node is AMD_Radeon_RX_9070_XT. If your fleet
+      # uses the older AMD_Radeon_9070XT normalisation, change it here.
       nodeSelector:
-        node-type: dgpu
+        amd.com/gpu.product-name: "AMD_Radeon_RX_9070_XT"
       env: {}
       quotaRate: 4
-    strix-npu:
-      displayName: "AMD XDNA2 (Strix Point NPU)"
-      description: "AMD XDNA2 NPU with AI acceleration"
+    r9700:
+      displayName: "AMD Radeon™ AI Pro R9700 (Workstation GPU)"
+      description: "RDNA 4.0 (gfx1201) | Compute Units 64 | 32GB GDDR6"
       nodeSelector:
-        type: strix
+        amd.com/gpu.product-name: "AMD_Radeon_AI_PRO_R9700"
       env: {}
-      quotaRate: 1
+      quotaRate: 4
 
   # --------------------------------------------------------------------------
   # Course Resources
   # --------------------------------------------------------------------------
   resources:
+    # Replace these with your own registry if you mirror or rebuild images.
     images:
-      cpu: "ghcr.io/your-org/auplc-default:latest"
-      gpu: "ghcr.io/your-org/auplc-base:latest"
-      Course-CV: "ghcr.io/your-org/auplc-cv:latest"
-      Course-DL: "ghcr.io/your-org/auplc-dl:latest"
-      Course-LLM: "ghcr.io/your-org/auplc-llm:latest"
-      Course-PhySim: "ghcr.io/your-org/auplc-physim:latest"
+      cpu: "ghcr.io/amdresearch/auplc-default:latest"
+      gpu: "ghcr.io/amdresearch/auplc-base:latest"
+      Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
+      Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
+      Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
+      Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
 
     requirements:
       cpu:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
+        cpu: "0"
+        memory: "0Gi"
       gpu:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-CV:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-DL:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-LLM:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       Course-PhySim:
-        cpu: "4"
-        memory: "16Gi"
-        memory_limit: "24Gi"
+        cpu: "0"
+        memory: "0Gi"
         amd.com/gpu: "1"
       none:
-        cpu: "2"
-        memory: "4Gi"
-        memory_limit: "6Gi"
+        cpu: "0"
+        memory: "0Gi"
 
     metadata:
       cpu:
@@ -191,8 +213,8 @@ custom:
         acceleratorKeys:
           - strix-halo
         # acceleratorOverrides: (optional) per-accelerator image and env overrides
-        #   dgpu:
-        #     image: "ghcr.io/your-org/auplc-cv:latest-gfx120X"
+        #   9070xt:
+        #     image: "ghcr.io/amdresearch/auplc-cv:v1.0-rocm-gfx120X"
         #     env:
         #       HSA_OVERRIDE_GFX_VERSION: "11.0.0"
       Course-DL:
@@ -225,7 +247,6 @@ custom:
       cpu:
         - cpu
       gpu:
-        - gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -237,11 +258,25 @@ custom:
         - Course-DL
         - Course-LLM
         - Course-PhySim
-      native-users:
-        - cpu
+      AUP:
         - Course-CV
         - Course-DL
         - Course-LLM
+        - Course-PhySim
+      native-users:
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
+        - cpu
+        - gpu
+      github-users:
+        - cpu
+        - gpu
+        - Course-CV
+        - Course-DL
+        - Course-LLM
+        - Course-PhySim
 
   # Local accounts for multi auth mode (pattern supports ranges like {01-50})
   # localAccounts:
@@ -286,6 +321,9 @@ hub:
           </div>
 
   config:
+    JupyterHub:
+      redirect_to_server: false
+
     Authenticator:
       allow_all: true
       admin_users:
@@ -293,7 +331,7 @@ hub:
 
     # GitHub App OAuth (replaces legacy OAuth App)
     # Create at: https://github.com/organizations/<YOUR-ORG>/settings/apps/new
-    # Permissions: Contents (read-only), Members (read-only)
+    # Permissions: Contents (read-only), Metadata (read-only), Members (read-only)
     # Webhook: off
     GitHubOAuthenticator:
       oauth_callback_url: "https://your.domain.com/hub/github/oauth_callback"
@@ -301,6 +339,8 @@ hub:
       client_secret: "TODO"
       allowed_organizations:
         - your-github-org
+      # Use [] for GitHub App credentials. For legacy OAuth Apps, use
+      # read:user and read:org instead.
       scope: []
 
     KubeSpawner:
@@ -309,6 +349,11 @@ hub:
         - github-registry-secret
 
 singleuser:
+  extraPodConfig:
+    securityContext:
+      fsGroup: 100
+      supplementalGroups:
+        - 993
   storage:
     dynamic:
       storageClass: nfs-client
