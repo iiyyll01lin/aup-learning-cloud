@@ -53,13 +53,12 @@ kubectl create -f https://raw.githubusercontent.com/ROCm/k8s-device-plugin/maste
 kubectl describe node <node-name> | grep amd.com/gpu
 ```
 
-### Legacy `node-type` label (multi-node deployments only)
+### Optional legacy `node-type` label (manual multi-node deployments)
 
-`runtime/values-multi-nodes.yaml.example` still selects nodes via a custom
-`node-type` label because multi-node admins may want to pin course pods to
-specific hostnames before GPU labels are available. That path is NOT used by
-`auplc-installer`; if you maintain a multi-node cluster with that values
-file, apply the labels with:
+`runtime/values-multi-nodes.yaml.example` now follows `runtime/values.yaml` and
+uses the ROCm labeller's `amd.com/gpu.product-name` selectors. If you still
+prefer to pin hosts with a custom `node-type` label, `scripts/label-node.sh`
+shows one legacy labelling scheme:
 
 ```bash
 kubectl label nodes <NODE_NAME> node-type=strix-halo
@@ -68,9 +67,10 @@ kubectl label nodes <NODE_NAME> node-type=strix-halo
 | node-type     | Hardware |
 |---------------|----------|
 | `phx`         | Phoenix (AMD 7940HS / 7640HS) |
-| `dgpu`        | Discrete GPU (Radeon 9070XT, W9700) |
 | `strix`       | Strix (AMD AI 370 / 350) |
 | `strix-halo`  | Strix-Halo (AMD AI MAX 395) |
+| `9070xt`      | Radeon RX 9070 XT |
+| `r9700`       | Radeon AI Pro R9700 |
 
 See also [`scripts/label-node.sh`](../../scripts/label-node.sh) for a bulk
 labelling example.
