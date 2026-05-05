@@ -23,6 +23,14 @@ version = "0.1.0"
 description = "AUP Learning Cloud - JupyterHub deployment for AI education"
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+# Optional packages for the TUI installer (auplc-installer tui).
+# Without these the installer falls back to a stdlib-only numbered menu.
+installer = [
+    "questionary>=2.0.1",
+    "prompt_toolkit>=3.0.43",
+]
+
 [tool.ruff]
 # Target Python version
 target-version = "py310"
