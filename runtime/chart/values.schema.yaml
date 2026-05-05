@@ -3233,9 +3233,8 @@ properties:
               displayName: "AMD Radeon™ 890M (Strix Point iGPU)"
               description: "RDNA 3.5 | 16 CUs | 4GB LPDDR5X"
               nodeSelector:
-                node-type: strix
-              env:
-                HSA_OVERRIDE_GFX_VERSION: "11.5.0"
+                amd.com/gpu.product-name: "AMD_Radeon_890M_Graphics"
+              env: {}
               quotaRate: 2
           ```
 
@@ -3367,9 +3366,7 @@ properties:
                     - phx
                   acceleratorOverrides:
                     phx:
-                      image: "ghcr.io/amdresearch/auplc-cv:v1.3.7"
-                      env:
-                        HSA_OVERRIDE_GFX_VERSION: "11.0.0"
+                      image: "ghcr.io/your-org/auplc-cv:<tag-for-phx>"
               ```
 
       teams:
