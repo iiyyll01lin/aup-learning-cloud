@@ -24,6 +24,7 @@ SOFTWARE.
 ## GPU Base Image (`Dockerfile.rocm`)
 
 Multi-target ROCm GPU base image. Set `GPU_TARGET` to build for any supported architecture.
+`Dockerfile.rocm` defaults to ROCm 7.12.0 unless `ROCM_VERSION` is overridden at build time.
 
 ### Supported Targets
 
@@ -36,7 +37,7 @@ Multi-target ROCm GPU base image. Set `GPU_TARGET` to build for any supported ar
 | gfx120x       | RDNA 4   | gfx1201 (dGPU: RX 9070 XT, R9700, RX 9600 GRE, …) | gfx120X-all |
 
 The `GPU_TARGET` value is the short name used by the AMD apt repo
-(`amdrocm7.11-<GPU_TARGET>`) and as the image-tag suffix. The pip wheel index
+(`amdrocm7.12-<GPU_TARGET>`) and as the image-tag suffix. The pip wheel index
 at <https://repo.amd.com/rocm/whl/> uses the "long" `gfxNNNX-all` path for
 the generic RDNA 3 / RDNA 4 buckets; `Dockerfile.rocm` maps short → long
 automatically. CI passes `PYTORCH_WHL_TARGET` explicitly (see
