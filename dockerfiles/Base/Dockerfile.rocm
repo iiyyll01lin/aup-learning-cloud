@@ -39,7 +39,7 @@ ARG NB_GID=100
 # The tarball and wheel URLs are derived from GPU_TARGET automatically.
 # Use ROCM_TARBALL_URL / PYTORCH_INDEX_URL to override for edge cases.
 ARG GPU_TARGET=gfx1151
-ARG ROCM_VERSION=7.11.0
+ARG ROCM_VERSION=7.12.0
 ARG PYTORCH_VERSION=2.9.1
 ARG TORCHVISION_VERSION=0.24.0
 ARG TORCHAUDIO_VERSION=2.9.0
@@ -94,7 +94,7 @@ RUN mkdir -p /etc/apt/keyrings && \
 RUN echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.amd.com/rocm/packages/ubuntu2404 stable main' \
     > /etc/apt/sources.list.d/rocm.list
 
-# Install ROCm from apt (package name uses GPU_TARGET, e.g. amdrocm7.11-gfx110X-all)
+# Install ROCm from apt (package name uses GPU_TARGET, e.g. amdrocm7.12-gfx110X-all)
 # After install, create standard /opt/rocm/{bin,lib,include} symlinks — the amdrocm
 # packages install into /opt/rocm/core-<ver>/ without the standard top-level layout,
 # so hipcc and device bitcode are not found via PATH / LD_LIBRARY_PATH otherwise.
