@@ -11,6 +11,7 @@ the installer reads from.
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from auplc_installer.gpu import (
@@ -19,8 +20,11 @@ from auplc_installer.gpu import (
     PRODUCT_NAME_TO_SKU,
     GpuConfig,
     SkuEntry,
+    _rocminfo_gpu_agent_records,
     append_product,
     detect_and_configure_gpu,
+    detect_gpu_gfx_family,
+    detect_gpu_product_names,
     is_curated_sku,
     normalise_gpu_type_key,
     normalise_product_name,
@@ -56,16 +60,44 @@ class NormaliseProductNameTests(unittest.TestCase):
         )
 
 
+ROCMINFO_WITH_STRIX_CPU_AND_GPU = """
+Agent 1
+Name:                    AMD Ryzen AI 9 HX 370 w/ Radeon 890M
+Marketing Name:          AMD Ryzen AI 9 HX 370 w/ Radeon 890M
+Device Type:             CPU
+ISA Info:
+Agent 2
+Name:                    gfx1150
+Marketing Name:          AMD Radeon Graphics
+Device Type:             GPU
+ISA Info:
+ISA 1
+Name:                    amdgcn-amd-amdhsa--gfx1150
+ISA 2
+Name:                    amdgcn-amd-amdhsa--gfx11-generic
+"""
+
+
+class RocminfoGpuAgentParserTests(unittest.TestCase):
+    def test_records_ignore_cpu_marketing_name_and_keep_gpu_gfx_target(self) -> None:
+        self.assertEqual(_rocminfo_gpu_agent_records(ROCMINFO_WITH_STRIX_CPU_AND_GPU), [("AMD Radeon Graphics", ["gfx1150"])])
+
+    @patch("auplc_installer.gpu.command_exists", return_value=True)
+    @patch("auplc_installer.gpu.run_capture", return_value=SimpleNamespace(stdout=ROCMINFO_WITH_STRIX_CPU_AND_GPU))
+    def test_detect_gpu_product_names_reads_gpu_agent_marketing_only(self, *_: object) -> None:
+        self.assertEqual(detect_gpu_product_names(), ["AMD_Radeon_Graphics"])
+
+    @patch("auplc_installer.gpu.command_exists", return_value=True)
+    @patch("auplc_installer.gpu.run_capture", return_value=SimpleNamespace(stdout=ROCMINFO_WITH_STRIX_CPU_AND_GPU))
+    def test_detect_gpu_gfx_family_prefers_gpu_agent_target(self, *_: object) -> None:
+        self.assertEqual(detect_gpu_gfx_family(), "gfx1150")
+
+
 class CuratedSkuLookupTests(unittest.TestCase):
     def test_known_product_name_resolves_to_curated_row(self) -> None:
         row = sku_for_product_name("AMD_Radeon_8060S_Graphics")
         self.assertEqual(row[0], "strix-halo")
         self.assertEqual(row[1], "gfx1151")
-
-    def test_ryzen_ai_890m_marketing_name_resolves_to_strix(self) -> None:
-        row = sku_for_product_name("AMD_Ryzen_AI_9_HX_370_w_Radeon_890M")
-        self.assertEqual(row[0], "strix")
-        self.assertEqual(row[1], "gfx1150")
 
     def test_unknown_product_name_synthesises_row(self) -> None:
         row = sku_for_product_name("AMD_Mystery_GPU")

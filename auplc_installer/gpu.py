@@ -34,7 +34,6 @@ SkuRow = tuple[str, str, str, int, str]
 PRODUCT_NAME_TO_SKU: dict[str, SkuRow] = {
     "AMD_Radeon_780M_Graphics": ("phx", "gfx110x", "11.0.0", 2, "AMD Radeon 780M (Phoenix Point iGPU)"),
     "AMD_Radeon_890M_Graphics": ("strix", "gfx1150", "", 2, "AMD Radeon 890M (Strix Point iGPU)"),
-    "AMD_Ryzen_AI_9_HX_370_w_Radeon_890M": ("strix", "gfx1150", "", 2, "AMD Radeon 890M (Strix Point iGPU)"),
     "AMD_Radeon_8060S_Graphics": ("strix-halo", "gfx1151", "", 3, "AMD Radeon 8060S (Strix Halo iGPU)"),
     "AMD_Radeon_9070XT": ("9070xt", "gfx120x", "", 4, "AMD Radeon RX 9070 XT"),
     "AMD_Radeon_RX_9070_XT": ("9070xt", "gfx120x", "", 4, "AMD Radeon RX 9070 XT"),
@@ -130,6 +129,77 @@ def normalise_product_name(raw: str) -> str:
     return s.strip("_")
 
 
+def _append_unique(out: list[str], seen: set[str], value: str) -> None:
+    if value and value not in seen:
+        seen.add(value)
+        out.append(value)
+
+
+def _rocminfo_gpu_agent_records(text: str) -> list[tuple[str, list[str]]]:
+    """Return ``(marketing_name, gfx_targets)`` records for GPU agents.
+
+    ROCm reports the GPU agent ``Name`` from the ISA processor target and the
+    ``Marketing Name`` from a separate product/branding field. Keep the parser
+    scoped to ``Device Type: GPU`` blocks so CPU/APU marketing names do not
+    influence image-tag selection.
+    """
+    records: list[tuple[str, list[str]]] = []
+    in_agent = False
+    in_isa = False
+    device_type = ""
+    agent_name = ""
+    marketing = ""
+    isa_targets: list[str] = []
+
+    def gfx_from(value: str) -> str:
+        m = re.search(r"\bgfx[0-9]{3,4}\b", value)
+        return m.group(0) if m else ""
+
+    def flush() -> None:
+        if not in_agent or device_type != "GPU":
+            return
+        targets: list[str] = []
+        seen_targets: set[str] = set()
+        for target in isa_targets:
+            _append_unique(targets, seen_targets, target)
+        _append_unique(targets, seen_targets, gfx_from(agent_name))
+        records.append((marketing, targets))
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if re.match(r"^Agent\s+\d+\b", line):
+            flush()
+            in_agent = True
+            in_isa = False
+            device_type = ""
+            agent_name = ""
+            marketing = ""
+            isa_targets = []
+            continue
+        if not in_agent:
+            continue
+        if line.startswith("ISA Info:"):
+            in_isa = True
+            continue
+        if line.startswith("Device Type:"):
+            device_type = line.split(":", 1)[1].strip()
+            continue
+        if line.startswith("Marketing Name:"):
+            marketing = line.split(":", 1)[1].strip()
+            continue
+        if line.startswith("Name:"):
+            value = line.split(":", 1)[1].strip()
+            if in_isa:
+                target = gfx_from(value)
+                if target:
+                    isa_targets.append(target)
+            elif not agent_name:
+                agent_name = value
+
+    flush()
+    return records
+
+
 def detect_gpu_product_names() -> list[str]:
     """All distinct AMD GPU product names on this host (labeller-normalised)."""
     out: list[str] = []
@@ -143,22 +213,9 @@ def detect_gpu_product_names() -> list[str]:
             text = res.stdout or ""
         except Exception:
             text = ""
-        marketing = ""
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            m = re.match(r"^Marketing Name:\s*(.*)$", line)
-            if m:
-                marketing = m.group(1).strip()
-                continue
-            m = re.match(r"^Device Type:\s*(.*)$", line)
-            if m:
-                devtype = m.group(1).strip()
-                if devtype == "GPU" and marketing:
-                    name = normalise_product_name(marketing)
-                    if name and name not in seen:
-                        seen.add(name)
-                        out.append(name)
-                marketing = ""
+        for marketing, _ in _rocminfo_gpu_agent_records(text):
+            name = normalise_product_name(marketing)
+            _append_unique(out, seen, name)
 
     # 2. amdgpu sysfs (no ROCm dependency).
     for f in sorted(Path("/sys/class/drm").glob("card*/device/product_name")):
@@ -184,10 +241,9 @@ def detect_gpu_gfx_family() -> str | None:
     if command_exists("rocminfo"):
         try:
             res = run_capture(["rocminfo"], check=False, stderr_to_stdout=True)
-            for line in (res.stdout or "").splitlines():
-                m = re.search(r"gfx[0-9]+", line)
-                if m:
-                    return m.group(0)
+            for _, targets in _rocminfo_gpu_agent_records(res.stdout or ""):
+                if targets:
+                    return targets[0]
         except Exception:
             pass
 
