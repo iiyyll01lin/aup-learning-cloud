@@ -80,7 +80,9 @@ Name:                    amdgcn-amd-amdhsa--gfx11-generic
 
 class RocminfoGpuAgentParserTests(unittest.TestCase):
     def test_records_ignore_cpu_marketing_name_and_keep_gpu_gfx_target(self) -> None:
-        self.assertEqual(_rocminfo_gpu_agent_records(ROCMINFO_WITH_STRIX_CPU_AND_GPU), [("AMD Radeon Graphics", ["gfx1150"])])
+        self.assertEqual(
+            _rocminfo_gpu_agent_records(ROCMINFO_WITH_STRIX_CPU_AND_GPU), [("AMD Radeon Graphics", ["gfx1150"])]
+        )
 
     @patch("auplc_installer.gpu.command_exists", return_value=True)
     @patch("auplc_installer.gpu.run_capture", return_value=SimpleNamespace(stdout=ROCMINFO_WITH_STRIX_CPU_AND_GPU))
