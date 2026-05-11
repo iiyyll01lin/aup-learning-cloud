@@ -24,6 +24,7 @@ from auplc_installer.gpu import (
     is_curated_sku,
     normalise_gpu_type_key,
     normalise_product_name,
+    refine_gpu_config_from_node_labels,
     resolve_gpu_config,
     sku_for_detected_product,
     sku_for_product_name,
@@ -48,12 +49,23 @@ class NormaliseProductNameTests(unittest.TestCase):
         self.assertEqual(normalise_product_name(""), "")
         self.assertEqual(normalise_product_name("   "), "")
 
+    def test_normalises_ryzen_ai_890m_marketing_name(self) -> None:
+        self.assertEqual(
+            normalise_product_name("AMD Ryzen AI 9 HX 370 w/ Radeon 890M"),
+            "AMD_Ryzen_AI_9_HX_370_w_Radeon_890M",
+        )
+
 
 class CuratedSkuLookupTests(unittest.TestCase):
     def test_known_product_name_resolves_to_curated_row(self) -> None:
         row = sku_for_product_name("AMD_Radeon_8060S_Graphics")
         self.assertEqual(row[0], "strix-halo")
         self.assertEqual(row[1], "gfx1151")
+
+    def test_ryzen_ai_890m_marketing_name_resolves_to_strix(self) -> None:
+        row = sku_for_product_name("AMD_Ryzen_AI_9_HX_370_w_Radeon_890M")
+        self.assertEqual(row[0], "strix")
+        self.assertEqual(row[1], "gfx1150")
 
     def test_unknown_product_name_synthesises_row(self) -> None:
         row = sku_for_product_name("AMD_Mystery_GPU")
@@ -112,6 +124,23 @@ class DetectedProductFallbackTests(unittest.TestCase):
         self.assertEqual(cfg.accel_key, "strix")
         self.assertEqual(cfg.gpu_target, "gfx1150")
         self.assertEqual(cfg.gpu_product_name, "AMD_Radeon_Graphics")
+
+    @patch("auplc_installer.gpu._read_gpu_product_names_from_node_labels", return_value=["AMD_Radeon_Graphics"])
+    def test_refinement_preserves_existing_gfx_for_generic_product_name(self, *_: object) -> None:
+        cfg = GpuConfig()
+        cfg.append(
+            SkuEntry(
+                accel_key="strix",
+                product_name="AMD_Radeon_Graphics",
+                gpu_target="gfx1150",
+                accel_env="",
+                quota_rate=2,
+                display_name="",
+            )
+        )
+        refine_gpu_config_from_node_labels(cfg)
+        self.assertEqual(cfg.accel_key, "strix")
+        self.assertEqual(cfg.gpu_target, "gfx1150")
 
 
 class FallbackQuotaRateAlignmentTests(unittest.TestCase):

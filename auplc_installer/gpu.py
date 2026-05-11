@@ -34,6 +34,7 @@ SkuRow = tuple[str, str, str, int, str]
 PRODUCT_NAME_TO_SKU: dict[str, SkuRow] = {
     "AMD_Radeon_780M_Graphics": ("phx", "gfx110x", "11.0.0", 2, "AMD Radeon 780M (Phoenix Point iGPU)"),
     "AMD_Radeon_890M_Graphics": ("strix", "gfx1150", "", 2, "AMD Radeon 890M (Strix Point iGPU)"),
+    "AMD_Ryzen_AI_9_HX_370_w_Radeon_890M": ("strix", "gfx1150", "", 2, "AMD Radeon 890M (Strix Point iGPU)"),
     "AMD_Radeon_8060S_Graphics": ("strix-halo", "gfx1151", "", 3, "AMD Radeon 8060S (Strix Halo iGPU)"),
     "AMD_Radeon_9070XT": ("9070xt", "gfx120x", "", 4, "AMD Radeon RX 9070 XT"),
     "AMD_Radeon_RX_9070_XT": ("9070xt", "gfx120x", "", 4, "AMD Radeon RX 9070 XT"),
@@ -495,7 +496,7 @@ def refine_gpu_config_from_node_labels(cfg: GpuConfig) -> None:
 
     cfg.reset()
     for n in names:
-        append_product(cfg, n)
+        append_product(cfg, n, pinned_target)
 
     log("Refreshed GPU SKUs from node labels (ROCm labeller is authoritative):")
     log("  product names    : " + ", ".join(names))
