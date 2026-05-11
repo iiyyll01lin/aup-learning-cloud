@@ -412,7 +412,7 @@ function App() {
               {quota?.enabled && (
                 <span className="lb-quota-inline">
                   {" · Quota: "}
-                  {quota.unlimited ? "Unlimited" : `${quota.balance}h remaining`}
+                  {quota.unlimited ? "Unlimited" : `${quota.balance} min remaining`}
                 </span>
               )}
             </div>
