@@ -10,6 +10,11 @@ service_prefix="${JUPYTERHUB_SERVICE_PREFIX:-/}"
 workdir="${AUPLC_CODE_WORKDIR:-/home/jovyan}"
 extensions_dir="${AUPLC_CODE_EXTENSIONS_DIR:-/opt/auplc/code-server/extensions}"
 
+url_decode() {
+  local value="${1//+/ }"
+  printf '%b' "${value//%/\\x}"
+}
+
 case "${service_prefix}" in
   /*) ;;
   *) service_prefix="/${service_prefix}" ;;
@@ -20,13 +25,14 @@ case "${service_prefix}" in
   *) service_prefix="${service_prefix}/" ;;
 esac
 
-regex_prefix="$(printf '%s' "${service_prefix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+nginx_prefix="$(url_decode "${service_prefix}")"
+regex_prefix="$(printf '%s' "${nginx_prefix}" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
 nginx_conf="/tmp/auplc-code-server-nginx.conf"
 redirect_block=""
 
 if [ "${service_prefix}" != "/" ]; then
   redirect_block="
-    location = ${service_prefix%/} {
+    location = ${nginx_prefix%/} {
       return 302 ${service_prefix};
     }
 "
@@ -52,10 +58,11 @@ http {
 
   server {
     listen 0.0.0.0:${public_port};
+    absolute_redirect off;
     client_max_body_size 0;
 ${redirect_block}
 
-    location ${service_prefix} {
+    location ${nginx_prefix} {
       rewrite ^${regex_prefix}(.*)\$ /\$1 break;
       proxy_pass http://127.0.0.1:${code_server_port};
       proxy_http_version 1.1;
