@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import copy
 import json
 import os
 import re
@@ -580,8 +581,30 @@ class RemoteLabKubeSpawner(KubeSpawner):
         """Return whether the resource should launch code-server directly."""
         return resource_type in {"code-cpu", "code-gpu"}
 
+    def _reset_per_spawn_state(self) -> None:
+        """Clear fields that are derived from the selected resource each spawn."""
+        if not hasattr(self, "_resource_baseline_state"):
+            self._resource_baseline_state = {
+                "cmd": copy.deepcopy(self.cmd),
+                "args": copy.deepcopy(self.args),
+                "default_url": copy.deepcopy(self.default_url),
+                "node_affinity_required": copy.deepcopy(self.node_affinity_required),
+                "extra_resource_guarantees": copy.deepcopy(self.extra_resource_guarantees),
+                "extra_resource_limits": copy.deepcopy(self.extra_resource_limits),
+                "init_containers": copy.deepcopy(self.init_containers),
+                "extra_container_config": copy.deepcopy(self.extra_container_config),
+                "environment": copy.deepcopy(self.environment),
+            }
+
+        for key, value in self._resource_baseline_state.items():
+            setattr(self, key, copy.deepcopy(value))
+
+        self._has_git_init_container = False
+
     def _configure_spawner(self, resource_type: str, gpu_selection: str | None = None) -> None:
         """Configure the spawner based on the resource type and GPU selection."""
+
+        self._reset_per_spawn_state()
 
         # Set basic configuration
         self.image = self.resource_images[resource_type]
@@ -694,9 +717,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
         if self._is_code_resource(resource_type):
             self.cmd = ["/usr/local/bin/start-code-server.sh"]
             self.args = []
-            self.environment.setdefault("AUPLC_HUB_URL", "/hub/home")
-            self.environment.setdefault("AUPLC_LAUNCH_MODE", "code-server")
-            self.environment.setdefault("AUPLC_CODE_WORKDIR", "/home/jovyan")
+            self.environment["AUPLC_HUB_URL"] = "/hub/home"
+            self.environment["AUPLC_LAUNCH_MODE"] = "code-server"
+            self.environment["AUPLC_CODE_WORKDIR"] = "/home/jovyan"
 
         # Special configuration for NPU resources
         if resource_type in ["Tutorial-NPU-Resnet", "ROSCON2025-GPU", "ROSCON2025-NPU"]:

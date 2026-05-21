@@ -23,6 +23,7 @@ GPU_TARGET ?= gfx1151
 
 # GPU base image used by course Dockerfiles (override to track a specific version)
 GPU_BASE_IMAGE ?= ghcr.io/amdresearch/auplc-base:latest
+CODE_GPU_BASE_IMAGE ?= ghcr.io/amdresearch/auplc-base:latest-$(GPU_TARGET)
 
 # Build args for docker build (constructed from mirror settings)
 BUILD_ARGS :=
@@ -98,7 +99,7 @@ code-gpu:
 		echo "Building Code GPU Image (GPU_TARGET=$(GPU_TARGET))..."; \
 		echo "-------------------------------------------";
 
-	cd Code && IMAGE_FLAVOR=gpu BASE_IMAGE=$(GPU_BASE_IMAGE) bash ./build.sh
+	cd Code && IMAGE_FLAVOR=gpu BASE_IMAGE=$(CODE_GPU_BASE_IMAGE) bash ./build.sh
 	docker tag ghcr.io/amdresearch/auplc-code-gpu:latest ghcr.io/amdresearch/auplc-code-gpu:latest-$(GPU_TARGET)
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-code-gpu:latest
 
