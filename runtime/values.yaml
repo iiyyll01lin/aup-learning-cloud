@@ -195,6 +195,8 @@ custom:
     images:
       cpu: "ghcr.io/amdresearch/auplc-default:latest"
       gpu: "ghcr.io/amdresearch/auplc-base:latest"
+      code-cpu: "ghcr.io/amdresearch/auplc-code-cpu:latest"
+      code-gpu: "ghcr.io/amdresearch/auplc-code-gpu:latest"
       Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
       Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
       Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
@@ -207,7 +209,14 @@ custom:
       cpu:
         cpu: "0"
         memory: "0Gi"
+      code-cpu:
+        cpu: "0"
+        memory: "0Gi"
       gpu:
+        cpu: "0"
+        memory: "0Gi"
+        amd.com/gpu: "1"
+      code-gpu:
         cpu: "0"
         memory: "0Gi"
         amd.com/gpu: "1"
@@ -241,10 +250,25 @@ custom:
         accelerator: ""
         acceleratorKeys: []
         allowGitClone: true
+      code-cpu:
+        group: "DEVELOPMENT"
+        description: "Code Server CPU Environment"
+        subDescription: "CPU-only development workspace"
+        accelerator: ""
+        acceleratorKeys: []
+        allowGitClone: true
       gpu:
         group: "CUSTOM REPO"
         description: "Basic GPU Environment"
         subDescription: "GPU Accelerated Environment"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+        allowGitClone: true
+      code-gpu:
+        group: "DEVELOPMENT"
+        description: "Code Server GPU Environment"
+        subDescription: "GPU-accelerated development workspace"
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
@@ -291,7 +315,9 @@ custom:
     mapping:
       cpu:
         - cpu
+        - code-cpu
       gpu:
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -299,6 +325,8 @@ custom:
       official:
         - cpu
         - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -309,6 +337,8 @@ custom:
         - Course-LLM
         - Course-PhySim
       native-users:
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -318,6 +348,8 @@ custom:
       github-users:
         - cpu
         - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM

@@ -576,6 +576,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
             return self.quota_rates.get("cpu", 1)
         return self.quota_rates.get(accelerator_type, self.quota_rates.get("cpu", 1))
 
+    def _is_code_resource(self, resource_type: str) -> bool:
+        """Return whether the resource should launch code-server directly."""
+        return resource_type in {"code-cpu", "code-gpu"}
+
     def _configure_spawner(self, resource_type: str, gpu_selection: str | None = None) -> None:
         """Configure the spawner based on the resource type and GPU selection."""
 
@@ -687,6 +691,13 @@ class RemoteLabKubeSpawner(KubeSpawner):
                             f"Applied acceleratorOverrides env for {resource_type}/{gpu_selection}: {accel_override.env}"
                         )
 
+        if self._is_code_resource(resource_type):
+            self.cmd = ["/usr/local/bin/start-code-server.sh"]
+            self.args = []
+            self.environment.setdefault("AUPLC_HUB_URL", "/hub/home")
+            self.environment.setdefault("AUPLC_LAUNCH_MODE", "code-server")
+            self.environment.setdefault("AUPLC_CODE_WORKDIR", "/home/jovyan")
+
         # Special configuration for NPU resources
         if resource_type in ["Tutorial-NPU-Resnet", "ROSCON2025-GPU", "ROSCON2025-NPU"]:
             self.log.debug(f"Set node affinity for NPU {resource_type}")
@@ -772,8 +783,10 @@ class RemoteLabKubeSpawner(KubeSpawner):
             }
         )
 
+        is_code_resource = self._is_code_resource(resource_type)
+
         # Inject allowed origins into notebook server startup args
-        if self.notebook_allowed_origins:
+        if self.notebook_allowed_origins and not is_code_resource:
             origin_pat = "|".join(re.escape(o) if o != "*" else ".*" for o in self.notebook_allowed_origins)
             extra_args = list(self.args or [])
             extra_args += [
@@ -846,7 +859,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
                     self.extra_container_config = extra
 
                     self.notebook_dir = home_mount_path
-                    self.default_url = f"/lab/tree/{repo_name}"
+                    if self._is_code_resource(resource_type):
+                        self.environment["AUPLC_CODE_WORKDIR"] = clone_dir
+                        self.default_url = "/"
+                    else:
+                        self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
                     branch_info = f" (branch: {repo_branch})" if repo_branch else ""
                     self.log.info(
