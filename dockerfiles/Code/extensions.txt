@@ -1,0 +1,4 @@
+ms-python.python
+ms-toolsai.jupyter
+redhat.vscode-yaml
+eamodio.gitlens
