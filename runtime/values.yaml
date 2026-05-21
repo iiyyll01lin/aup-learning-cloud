@@ -64,9 +64,9 @@ custom:
   # Use ["*"] to allow all, or list specific domains.
   # Example: ["https://mylab.example.com", "https://alt.example.org"]
   hub:
-    allowedOrigins: []
+    allowedOrigins: ["*"]
   notebook:
-    allowedOrigins: []
+    allowedOrigins: ["*"]
 
   # ============================================================================
   # Public Scheme (TLS termination outside the chart)
