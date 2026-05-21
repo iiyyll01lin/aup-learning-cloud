@@ -38,6 +38,7 @@ COPY start-code-server.sh /usr/local/bin/start-code-server.sh
 RUN chmod +x /usr/local/bin/start-code-server.sh && \
     mkdir -p \
         /opt/auplc/extensions/local \
+        /opt/auplc/code-server/extensions \
         /home/jovyan/.cache \
         /home/jovyan/.config \
         /home/jovyan/.local/share/code-server && \
@@ -48,10 +49,10 @@ USER jovyan
 RUN set -eu; \
     while IFS= read -r extension_id || [ -n "${extension_id}" ]; do \
         case "${extension_id}" in ''|'#'*) continue ;; esac; \
-        code-server --install-extension "${extension_id}"; \
+        code-server --extensions-dir /opt/auplc/code-server/extensions --install-extension "${extension_id}"; \
     done < /opt/auplc/extensions/extensions.txt; \
     find /opt/auplc/extensions/local -type f -name '*.vsix' -print0 | \
-        xargs -0 -r -n 1 code-server --install-extension
+        xargs -0 -r -n 1 code-server --extensions-dir /opt/auplc/code-server/extensions --install-extension
 
 EXPOSE 8888
 WORKDIR /home/jovyan

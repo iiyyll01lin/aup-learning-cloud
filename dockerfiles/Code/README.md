@@ -61,6 +61,11 @@ code-server on loopback. The proxy must preserve the full browser `Host` value
 with `X-Forwarded-Host` so code-server's WebSocket origin check succeeds behind
 JupyterHub and NodePort-style local URLs.
 
+Extensions are installed into `/opt/auplc/code-server/extensions` and code-server
+is launched with `--extensions-dir` pointing there. This keeps image-baked
+extensions available when Kubernetes mounts a persistent volume over
+`/home/jovyan`.
+
 `--auth none` is acceptable only because JupyterHub and the JupyterHub proxy remain the authentication boundary. The user pod's port `8888` must stay private to the Hub/proxy path and must not be exposed directly through an unauthenticated service, ingress, or port-forward shared with untrusted users.
 
 When users provide a Git repository on the spawn form, the existing init-container clone flow is reused. For code resources, the spawner points `AUPLC_CODE_WORKDIR` at the cloned directory so code-server opens the repository workspace.

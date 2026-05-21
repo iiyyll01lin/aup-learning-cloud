@@ -8,6 +8,7 @@ public_port="${PORT:-8888}"
 code_server_port="${AUPLC_CODE_SERVER_PORT:-8889}"
 service_prefix="${JUPYTERHUB_SERVICE_PREFIX:-/}"
 workdir="${AUPLC_CODE_WORKDIR:-/home/jovyan}"
+extensions_dir="${AUPLC_CODE_EXTENSIONS_DIR:-/opt/auplc/code-server/extensions}"
 
 case "${service_prefix}" in
   /*) ;;
@@ -72,7 +73,11 @@ ${redirect_block}
 }
 EOF
 
-code-server --auth none --bind-addr "127.0.0.1:${code_server_port}" "${workdir}" &
+code-server \
+  --auth none \
+  --bind-addr "127.0.0.1:${code_server_port}" \
+  --extensions-dir "${extensions_dir}" \
+  "${workdir}" &
 code_server_pid="$!"
 
 nginx -c "${nginx_conf}" -g 'daemon off;' &
