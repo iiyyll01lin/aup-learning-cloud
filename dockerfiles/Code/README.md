@@ -63,6 +63,9 @@ code-server on loopback. The proxy must preserve the full browser `Host` value
 with `X-Forwarded-Host` so code-server's WebSocket origin check succeeds behind
 JupyterHub and NodePort-style local URLs.
 
+Git is installed in the image so cloned projects can use source control from the
+integrated terminal and editor UI without additional setup.
+
 Extensions are installed into `/opt/auplc/code-server/extensions` and code-server
 is launched with `--extensions-dir` pointing there. This keeps image-baked
 extensions available when Kubernetes mounts a persistent volume over

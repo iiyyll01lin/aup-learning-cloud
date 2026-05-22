@@ -42,7 +42,7 @@ ARG IMAGE_FLAVOR
 USER root
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl nginx-light && \
+    apt-get install -y --no-install-recommends ca-certificates curl git nginx-light && \
     curl -fsSL -o /tmp/code-server.deb https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server_${CODE_SERVER_VERSION}_amd64.deb && \
     apt-get install -y --no-install-recommends /tmp/code-server.deb && \
     rm -f /tmp/code-server.deb && \
