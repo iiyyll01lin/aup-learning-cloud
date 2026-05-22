@@ -3318,6 +3318,15 @@ properties:
                     Allow users to clone a Git repository into their home
                     directory at spawn time. Should be false for course
                     resources that already include their own content.
+                launchMode:
+                  type: string
+                  enum:
+                    - jupyterlab
+                    - code-server
+                  description: |
+                    Single-user application mode for this resource. Omit or set
+                    to `jupyterlab` for the standard notebook server. Set to
+                    `code-server` to launch the browser-based coding workspace.
                 env:
                   type: object
                   additionalProperties:

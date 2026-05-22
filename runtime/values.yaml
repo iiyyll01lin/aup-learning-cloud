@@ -257,6 +257,7 @@ custom:
         accelerator: ""
         acceleratorKeys: []
         allowGitClone: true
+        launchMode: "code-server"
       gpu:
         group: "CUSTOM REPO"
         description: "Basic GPU Environment"
@@ -273,6 +274,7 @@ custom:
         acceleratorKeys:
           - strix-halo
         allowGitClone: true
+        launchMode: "code-server"
       Course-CV:
         group: "COURSE"
         description: "Computer Vision Course"
