@@ -17,8 +17,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export * from "./types/index.js";
-export * from "./api/index.js";
-export * from "./utils/index.js";
-export * from "./branding.js";
-export * from "./resourceTypes.js";
+import type { Resource, ResourceType } from "./types/resource.js";
+
+export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
+  notebook: "Notebook",
+  "browser-ide": "Browser IDE",
+};
+
+export function getResourceType(resource: Resource): ResourceType {
+  const explicitResourceType = resource.metadata?.resourceType;
+
+  if (explicitResourceType === "notebook" || explicitResourceType === "browser-ide") {
+    return explicitResourceType;
+  }
+
+  if (resource.metadata?.launchMode === "code-server") {
+    return "browser-ide";
+  }
+
+  return "notebook";
+}
+
+export function getResourceTypeLabel(resource: Resource): string {
+  return RESOURCE_TYPE_LABELS[getResourceType(resource)];
+}
