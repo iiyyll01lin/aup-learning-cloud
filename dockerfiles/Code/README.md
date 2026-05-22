@@ -46,6 +46,8 @@ make -C dockerfiles code
 
 `code-cpu` builds `ghcr.io/amdresearch/auplc-code-cpu:latest`. `code-gpu` builds `ghcr.io/amdresearch/auplc-code-gpu:latest` and tags the selected GPU target, for example `ghcr.io/amdresearch/auplc-code-gpu:latest-gfx1151`. The aggregate `code` target builds both.
 
+The Dockerfile pins code-server to version `4.96.4` so builds use a known editor runtime instead of silently changing when a new upstream release appears.
+
 ## Runtime Behavior
 
 The start script launches:
@@ -79,7 +81,15 @@ ms-python.python
 ms-toolsai.jupyter
 redhat.vscode-yaml
 eamodio.gitlens
+ms-python.debugpy
+charliermarsh.ruff
 ```
+
+This baseline keeps Python and Jupyter support for course work, Debugpy for Python debugging, and Ruff for Python linting and formatting. YAML is retained so users can read and edit course, Kubernetes, and other configuration files without adding their own support first. GitLens is retained on purpose so researchers can learn Git history, blame, and commit discipline inside the same workspace they use for code.
+
+Extension versions are not pinned in this iteration. code-server resolves the current compatible extension releases during each image build, while only the code-server package itself is pinned.
+
+Default editor settings are also not baked into the image in this iteration. User workspaces and profiles should keep control over editor preferences.
 
 Local `.vsix` packages from `extensions/` and the AUPLC Back-to-Hub extension package are installed during the image build. Before adding or redistributing additional VS Code, OpenVSX, or Marketplace extensions, verify that each extension's license and marketplace terms permit your intended use.
 

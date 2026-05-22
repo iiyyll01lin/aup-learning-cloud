@@ -19,14 +19,18 @@
 
 ARG BASE_IMAGE=ghcr.io/amdresearch/auplc-default:latest
 ARG IMAGE_FLAVOR=cpu
+ARG CODE_SERVER_VERSION=4.96.4
 FROM ${BASE_IMAGE}
 
+ARG CODE_SERVER_VERSION=4.96.4
 ARG IMAGE_FLAVOR
 USER root
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl nginx-light && \
-    curl -fsSL https://code-server.dev/install.sh | sh && \
+    curl -fsSL -o /tmp/code-server.deb https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server_${CODE_SERVER_VERSION}_amd64.deb && \
+    apt-get install -y --no-install-recommends /tmp/code-server.deb && \
+    rm -f /tmp/code-server.deb && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
