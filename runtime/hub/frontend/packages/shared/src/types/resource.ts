@@ -32,6 +32,7 @@ export interface ResourceMetadata {
   accelerator?: string;
   acceleratorKeys?: string[];
   allowGitClone?: boolean;
+  launchMode?: 'jupyterlab' | 'code-server';
   acceleratorOverrides?: Record<string, { image?: string; env?: Record<string, string> }>;
 }
 

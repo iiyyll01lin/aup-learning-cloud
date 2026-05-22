@@ -103,6 +103,7 @@ class ResourceMetadata(BaseModel):
     accelerator: str = ""
     acceleratorKeys: list[str] = Field(default_factory=list)
     allowGitClone: bool = False
+    launchMode: str | None = None
     env: dict[str, str] = Field(default_factory=dict)
     acceleratorOverrides: dict[str, AcceleratorOverride] | None = None
 

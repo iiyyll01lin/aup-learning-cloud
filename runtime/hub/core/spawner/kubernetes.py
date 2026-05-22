@@ -34,7 +34,7 @@ import os
 import re
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from jupyterhub.user import User as JupyterHubUser
 from kubespawner import KubeSpawner
@@ -64,6 +64,10 @@ NPU_SECURITY_CONFIG = {
         }
     }
 }
+
+LEGACY_CODE_SERVER_RESOURCES = {"code-cpu", "code-gpu"}
+DEFAULT_LAUNCH_MODE = "jupyterlab"
+CODE_SERVER_LAUNCH_MODE = "code-server"
 
 
 class RemoteLabKubeSpawner(KubeSpawner):
@@ -599,9 +603,19 @@ class RemoteLabKubeSpawner(KubeSpawner):
             return self.quota_rates.get("cpu", 1)
         return self.quota_rates.get(accelerator_type, self.quota_rates.get("cpu", 1))
 
-    def _is_code_resource(self, resource_type: str) -> bool:
+    def _get_launch_mode(self, resource_type: str) -> str:
+        """Return the configured launch mode for a resource."""
+        resource_metadata = self._hub_config.get_resource_metadata(resource_type) if self._hub_config else None
+        launch_mode = str(getattr(resource_metadata, "launchMode", "") or "").strip().lower()
+        if launch_mode:
+            return launch_mode
+        if resource_type in LEGACY_CODE_SERVER_RESOURCES:
+            return CODE_SERVER_LAUNCH_MODE
+        return DEFAULT_LAUNCH_MODE
+
+    def _launches_code_server(self, resource_type: str) -> bool:
         """Return whether the resource should launch code-server directly."""
-        return resource_type in {"code-cpu", "code-gpu"}
+        return self._get_launch_mode(resource_type) == CODE_SERVER_LAUNCH_MODE
 
     def _reset_per_spawn_state(self) -> None:
         """Clear fields that are derived from the selected resource each spawn."""
@@ -736,11 +750,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
                             f"Applied acceleratorOverrides env for {resource_type}/{gpu_selection}: {accel_override.env}"
                         )
 
-        if self._is_code_resource(resource_type):
+        if self._launches_code_server(resource_type):
             self.cmd = ["/usr/local/bin/start-code-server.sh"]
             self.args = []
             self.environment["AUPLC_HUB_URL"] = "/hub/home"
-            self.environment["AUPLC_LAUNCH_MODE"] = "code-server"
+            self.environment["AUPLC_LAUNCH_MODE"] = CODE_SERVER_LAUNCH_MODE
             self.environment["AUPLC_CODE_WORKDIR"] = "/home/jovyan"
 
         # Special configuration for NPU resources
@@ -828,13 +842,13 @@ class RemoteLabKubeSpawner(KubeSpawner):
             }
         )
 
-        is_code_resource = self._is_code_resource(resource_type)
+        launches_code_server = self._launches_code_server(resource_type)
 
-        if is_code_resource:
+        if launches_code_server:
             self.environment["AUPLC_HUB_URL"] = self._get_public_hub_home_url()
 
         # Inject allowed origins into notebook server startup args
-        if self.notebook_allowed_origins and not is_code_resource:
+        if self.notebook_allowed_origins and not launches_code_server:
             origin_pat = "|".join(re.escape(o) if o != "*" else ".*" for o in self.notebook_allowed_origins)
             extra_args = list(self.args or [])
             extra_args += [
@@ -907,9 +921,9 @@ class RemoteLabKubeSpawner(KubeSpawner):
                     self.extra_container_config = extra
 
                     self.notebook_dir = home_mount_path
-                    if self._is_code_resource(resource_type):
+                    if self._launches_code_server(resource_type):
                         self.environment["AUPLC_CODE_WORKDIR"] = clone_dir
-                        self.default_url = "/"
+                        self.default_url = f"/?folder={quote(clone_dir, safe='/')}"
                     else:
                         self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
