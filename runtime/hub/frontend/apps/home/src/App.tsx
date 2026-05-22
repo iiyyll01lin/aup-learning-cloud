@@ -19,7 +19,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Resource, ResourceGroup, UserQuotaInfo, UserDetail } from "@auplc/shared";
-import { getResources, getMyQuota, getMyUsage, PLATFORM_NAME } from "@auplc/shared";
+import {
+  getMyQuota,
+  getMyUsage,
+  getResources,
+  getResourceType,
+  getResourceTypeLabel,
+  PLATFORM_NAME,
+} from "@auplc/shared";
 import onboardingLaunchWorkspaceUrl from "./onboarding-launch-workspace.png";
 import onboardingResourcePickerUrl from "./onboarding-resource-picker.png";
 import onboardingDeveloperProgramQrUrl from "./onboarding-developer-program-qr.png";
@@ -562,6 +569,12 @@ function App() {
                           </span>
                         </div>
                         <div className="resource-card-tags">
+                          <span
+                            className="resource-type-badge"
+                            data-resource-type={getResourceType(resource)}
+                          >
+                            {getResourceTypeLabel(resource)}
+                          </span>
                           <span
                             className={`resource-tag tag-${accelType}`}
                           >
