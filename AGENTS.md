@@ -21,7 +21,7 @@ SOFTWARE.
 
 # AGENTS.md — AUP Learning Cloud
 
-This file provides guidance for AI coding agents (Cursor, Claude Code, GitHub Copilot Workspace,
+This file provides guidance for AI coding agents (Cursor, terminal-based coding assistants, GitHub Copilot Workspace,
 Devin, and similar tools) working in this repository.
 
 ## Project Identity
