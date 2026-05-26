@@ -1,5 +1,5 @@
-{#
 Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -17,36 +17,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-#}
-
-{% extends "page.html" %}
-{% if announcement_home is string %}
-  {% set announcement = announcement_home %}
-{% endif %}
-
-{%- block title -%}Home - AUP Learning Cloud{%- endblock title -%}
-
-{% block stylesheet %}
-{{ super() }}
-<link rel="stylesheet" href="{{ static_url('home-ui/assets/index.css') }}" />
-{% endblock %}
-
-{% block main %}
-<div id="home-root"></div>
-<script>
-  window.jhdata = {
-    base_url: {{ base_url|tojson }},
-    xsrf_token: {{ xsrf_token|tojson }},
-    user: {{ user.name|tojson }}
-  };
-  window.HOME_DATA = {
-    server_active: {{ 'true' if default_server.active else 'false' }},
-    server_url: {{ url|tojson }}
-  };
-</script>
-<script type="module" src="{{ static_url('home-ui/assets/index.js') }}"></script>
-{% endblock %}
-
-{% block script %}
-{{ super() }}
-{% endblock %}

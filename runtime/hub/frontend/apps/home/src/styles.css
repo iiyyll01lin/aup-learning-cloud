@@ -42,6 +42,7 @@
   --home-radius: 16px;
   --home-radius-lg: 24px;
   --home-radius-sm: 12px;
+  --home-pill-radius: 6px;
   --home-hover-shadow: 0 4px 18px rgba(0,0,0,0.08);
 }
 [data-bs-theme="dark"] {
@@ -584,6 +585,19 @@
   gap: 0.35rem;
   align-items: center;
 }
+.resource-type-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--home-pill-radius);
+  background: var(--home-primary-soft);
+  color: var(--home-primary);
+  border: 1px solid var(--home-border);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .resource-card-arrow {
   font-size: 0.75rem;
   color: var(--home-text-muted);
@@ -605,7 +619,7 @@
   font-size: 0.62rem;
   font-weight: 600;
   padding: 0.15rem 0.5rem;
-  border-radius: 6px;
+  border-radius: var(--home-pill-radius);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }

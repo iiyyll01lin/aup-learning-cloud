@@ -40,7 +40,7 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -103,6 +103,8 @@ class ResourceMetadata(BaseModel):
     accelerator: str = ""
     acceleratorKeys: list[str] = Field(default_factory=list)
     allowGitClone: bool = False
+    resourceType: Literal["notebook", "browser-ide"] | None = None
+    launchMode: str | None = None
     env: dict[str, str] = Field(default_factory=dict)
     acceleratorOverrides: dict[str, AcceleratorOverride] | None = None
 

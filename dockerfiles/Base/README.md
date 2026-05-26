@@ -75,3 +75,16 @@ docker build \
 ```bash
 docker build -t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
 ```
+
+## Generic Code Images
+
+The base images remain the foundation for notebook and coding environments. Generic code-server images are built separately from `dockerfiles/Code/`:
+
+```bash
+# From the repository root
+make -C dockerfiles code-cpu
+make -C dockerfiles code-gpu GPU_TARGET=gfx1151
+make -C dockerfiles code
+```
+
+`auplc-code-cpu` inherits from `auplc-default`, and `auplc-code-gpu` inherits from `auplc-base`. These are generic development images, not per-course VS Code variants. See `dockerfiles/Code/README.md` for the code-server runtime, security, and extension notes.

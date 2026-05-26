@@ -64,9 +64,9 @@ custom:
   # Use ["*"] to allow all, or list specific domains.
   # Example: ["https://mylab.example.com", "https://alt.example.org"]
   hub:
-    allowedOrigins: []
+    allowedOrigins: ["*"]
   notebook:
-    allowedOrigins: []
+    allowedOrigins: ["*"]
 
   # ============================================================================
   # Public Scheme (TLS termination outside the chart)
@@ -195,6 +195,8 @@ custom:
     images:
       cpu: "ghcr.io/amdresearch/auplc-default:latest"
       gpu: "ghcr.io/amdresearch/auplc-base:latest"
+      code-cpu: "ghcr.io/amdresearch/auplc-code-cpu:latest"
+      code-gpu: "ghcr.io/amdresearch/auplc-code-gpu:latest"
       Course-CV: "ghcr.io/amdresearch/auplc-cv:latest"
       Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
       Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
@@ -207,7 +209,14 @@ custom:
       cpu:
         cpu: "0"
         memory: "0Gi"
+      code-cpu:
+        cpu: "0"
+        memory: "0Gi"
       gpu:
+        cpu: "0"
+        memory: "0Gi"
+        amd.com/gpu: "1"
+      code-gpu:
         cpu: "0"
         memory: "0Gi"
         amd.com/gpu: "1"
@@ -241,6 +250,16 @@ custom:
         accelerator: ""
         acceleratorKeys: []
         allowGitClone: true
+        resourceType: "notebook"
+      code-cpu:
+        group: "DEVELOPMENT"
+        description: "Code Server CPU Environment"
+        subDescription: "CPU-only development workspace"
+        accelerator: ""
+        acceleratorKeys: []
+        allowGitClone: true
+        launchMode: "code-server"
+        resourceType: "browser-ide"
       gpu:
         group: "CUSTOM REPO"
         description: "Basic GPU Environment"
@@ -249,6 +268,17 @@ custom:
         acceleratorKeys:
           - strix-halo
         allowGitClone: true
+        resourceType: "notebook"
+      code-gpu:
+        group: "DEVELOPMENT"
+        description: "Code Server GPU Environment"
+        subDescription: "GPU-accelerated development workspace"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+        allowGitClone: true
+        launchMode: "code-server"
+        resourceType: "browser-ide"
       Course-CV:
         group: "COURSE"
         description: "Computer Vision Course"
@@ -261,6 +291,7 @@ custom:
         #     image: "ghcr.io/your-org/auplc-cv:<tag-for-9070xt>"
         #   r9700:
         #     image: "ghcr.io/your-org/auplc-cv:<tag-for-r9700>"
+        resourceType: "notebook"
       Course-DL:
         group: "COURSE"
         description: "Deep Learning Course"
@@ -268,6 +299,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
       Course-LLM:
         group: "COURSE"
         description: "Large Language Models Course"
@@ -275,6 +307,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
       Course-PhySim:
         group: "COURSE"
         description: "Genesis Physical Simulation Course"
@@ -282,6 +315,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
 
   # ============================================================================
   # Team Permission Configuration
@@ -291,7 +325,9 @@ custom:
     mapping:
       cpu:
         - cpu
+        - code-cpu
       gpu:
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -299,6 +335,8 @@ custom:
       official:
         - cpu
         - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -309,6 +347,8 @@ custom:
         - Course-LLM
         - Course-PhySim
       native-users:
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -318,6 +358,8 @@ custom:
       github-users:
         - cpu
         - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM

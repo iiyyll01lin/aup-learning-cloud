@@ -28,12 +28,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import copy
 import json
 import os
 import re
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from jupyterhub.user import User as JupyterHubUser
 from kubespawner import KubeSpawner
@@ -63,6 +64,10 @@ NPU_SECURITY_CONFIG = {
         }
     }
 }
+
+LEGACY_CODE_SERVER_RESOURCES = {"code-cpu", "code-gpu"}
+DEFAULT_LAUNCH_MODE = "jupyterlab"
+CODE_SERVER_LAUNCH_MODE = "code-server"
 
 
 class RemoteLabKubeSpawner(KubeSpawner):
@@ -326,6 +331,28 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         return options
 
+    def _get_public_hub_home_url(self) -> str:
+        """Return the public Hub home URL for links opened from code-server."""
+        hub_path = "/hub/home"
+        handler = getattr(self, "handler", None)
+
+        if handler is None:
+            return hub_path
+
+        public_url = str(getattr(handler, "public_url", "") or "").strip()
+        if public_url:
+            parsed = urlparse(public_url)
+            if parsed.scheme in {"http", "https"} and parsed.netloc:
+                return public_url.rstrip("/") + hub_path
+
+        request = getattr(handler, "request", None)
+        protocol = str(getattr(request, "protocol", "") or "").strip()
+        host = str(getattr(request, "host", "") or "").strip()
+        if protocol in {"http", "https"} and host:
+            return f"{protocol}://{host}{hub_path}"
+
+        return hub_path
+
     def _validate_and_sanitize_repo_url(self, url: str) -> tuple[bool, str, str]:
         """
         Validate and normalize a repository URL.
@@ -576,8 +603,44 @@ class RemoteLabKubeSpawner(KubeSpawner):
             return self.quota_rates.get("cpu", 1)
         return self.quota_rates.get(accelerator_type, self.quota_rates.get("cpu", 1))
 
+    def _get_launch_mode(self, resource_type: str) -> str:
+        """Return the configured launch mode for a resource."""
+        resource_metadata = self._hub_config.get_resource_metadata(resource_type) if self._hub_config else None
+        launch_mode = str(getattr(resource_metadata, "launchMode", "") or "").strip().lower()
+        if launch_mode:
+            return launch_mode
+        if resource_type in LEGACY_CODE_SERVER_RESOURCES:
+            return CODE_SERVER_LAUNCH_MODE
+        return DEFAULT_LAUNCH_MODE
+
+    def _launches_code_server(self, resource_type: str) -> bool:
+        """Return whether the resource should launch code-server directly."""
+        return self._get_launch_mode(resource_type) == CODE_SERVER_LAUNCH_MODE
+
+    def _reset_per_spawn_state(self) -> None:
+        """Clear fields that are derived from the selected resource each spawn."""
+        if not hasattr(self, "_resource_baseline_state"):
+            self._resource_baseline_state = {
+                "cmd": copy.deepcopy(self.cmd),
+                "args": copy.deepcopy(self.args),
+                "default_url": copy.deepcopy(self.default_url),
+                "node_affinity_required": copy.deepcopy(self.node_affinity_required),
+                "extra_resource_guarantees": copy.deepcopy(self.extra_resource_guarantees),
+                "extra_resource_limits": copy.deepcopy(self.extra_resource_limits),
+                "init_containers": copy.deepcopy(self.init_containers),
+                "extra_container_config": copy.deepcopy(self.extra_container_config),
+                "environment": copy.deepcopy(self.environment),
+            }
+
+        for key, value in self._resource_baseline_state.items():
+            setattr(self, key, copy.deepcopy(value))
+
+        self._has_git_init_container = False
+
     def _configure_spawner(self, resource_type: str, gpu_selection: str | None = None) -> None:
         """Configure the spawner based on the resource type and GPU selection."""
+
+        self._reset_per_spawn_state()
 
         # Set basic configuration
         self.image = self.resource_images[resource_type]
@@ -687,6 +750,13 @@ class RemoteLabKubeSpawner(KubeSpawner):
                             f"Applied acceleratorOverrides env for {resource_type}/{gpu_selection}: {accel_override.env}"
                         )
 
+        if self._launches_code_server(resource_type):
+            self.cmd = ["/usr/local/bin/start-code-server.sh"]
+            self.args = []
+            self.environment["AUPLC_HUB_URL"] = "/hub/home"
+            self.environment["AUPLC_LAUNCH_MODE"] = CODE_SERVER_LAUNCH_MODE
+            self.environment["AUPLC_CODE_WORKDIR"] = "/home/jovyan"
+
         # Special configuration for NPU resources
         if resource_type in ["Tutorial-NPU-Resnet", "ROSCON2025-GPU", "ROSCON2025-NPU"]:
             self.log.debug(f"Set node affinity for NPU {resource_type}")
@@ -772,8 +842,13 @@ class RemoteLabKubeSpawner(KubeSpawner):
             }
         )
 
+        launches_code_server = self._launches_code_server(resource_type)
+
+        if launches_code_server:
+            self.environment["AUPLC_HUB_URL"] = self._get_public_hub_home_url()
+
         # Inject allowed origins into notebook server startup args
-        if self.notebook_allowed_origins:
+        if self.notebook_allowed_origins and not launches_code_server:
             origin_pat = "|".join(re.escape(o) if o != "*" else ".*" for o in self.notebook_allowed_origins)
             extra_args = list(self.args or [])
             extra_args += [
@@ -846,7 +921,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
                     self.extra_container_config = extra
 
                     self.notebook_dir = home_mount_path
-                    self.default_url = f"/lab/tree/{repo_name}"
+                    if self._launches_code_server(resource_type):
+                        self.environment["AUPLC_CODE_WORKDIR"] = clone_dir
+                        self.default_url = f"/?folder={quote(clone_dir, safe='/')}"
+                    else:
+                        self.default_url = f"/lab/tree/{repo_name}"
                     self._has_git_init_container = True
                     branch_info = f" (branch: {repo_branch})" if repo_branch else ""
                     self.log.info(

@@ -25,6 +25,8 @@ export interface ResourceRequirements {
   "amd.com/npu"?: string;
 }
 
+export type ResourceType = 'notebook' | 'browser-ide';
+
 export interface ResourceMetadata {
   group: string;
   description: string;
@@ -32,6 +34,8 @@ export interface ResourceMetadata {
   accelerator?: string;
   acceleratorKeys?: string[];
   allowGitClone?: boolean;
+  resourceType?: ResourceType;
+  launchMode?: 'jupyterlab' | 'code-server';
   acceleratorOverrides?: Record<string, { image?: string; env?: Record<string, string> }>;
 }
 

@@ -128,7 +128,7 @@ Seamless integration with GitHub Single Sign-On (SSO) and Native Authenticator f
 
 Dynamic NFS provisioning ensures scalable and persistent storage for user data, while end-to-end TLS encryption with automated certificate management guarantees secure and reliable communication.
 
-## Available Notebook Environments
+## Available Notebook and Coding Environments
 
 Current environments are configured via `custom.resources.images` in `runtime/values.yaml`. These settings should be consistent with `prePuller.extraImages`.
 
@@ -136,10 +136,26 @@ Current environments are configured via `custom.resources.images` in `runtime/va
 | ----------- | ---------------------------------------- | ------------------------------- |
 | Base CPU    | `ghcr.io/amdresearch/auplc-default` | CPU                             |
 | GPU Base    | `ghcr.io/amdresearch/auplc-base`   | GPU                             |
+| Code CPU    | `ghcr.io/amdresearch/auplc-code-cpu` | CPU                             |
+| Code GPU    | `ghcr.io/amdresearch/auplc-code-gpu` | GPU                             |
 | CV COURSE   | `ghcr.io/amdresearch/auplc-cv`    | GPU |
 | DL COURSE   | `ghcr.io/amdresearch/auplc-dl`    | GPU |
 | LLM COURSE  | `ghcr.io/amdresearch/auplc-llm`   | GPU                |
 | PhySim COURSE | `ghcr.io/amdresearch/auplc-physim` | GPU               |
+
+The `auplc-default`, `auplc-base`, and `Course-*` images remain notebook and course focused. Browser-based coding is provided by generic code-server images instead of per-course VS Code image variants. Resources launch code-server when their `custom.resources.metadata.<resource>.launchMode` is set to `code-server`; the default configuration uses `code-cpu` for CPU-only coding workspaces and `code-gpu` for GPU-accelerated coding workspaces.
+
+Build the generic coding images from the repository root with:
+
+```bash
+make -C dockerfiles code-cpu
+make -C dockerfiles code-gpu GPU_TARGET=gfx1151
+make -C dockerfiles code
+```
+
+The code-server container starts on port `8888` with `code-server --auth none`. This is safe only when the user pod is reachable exclusively through JupyterHub and the JupyterHub proxy authentication boundary. Do not expose the code-server pod port directly through a NodePort, LoadBalancer, ingress, or other unauthenticated route.
+
+The code images install the built-in extension list from `dockerfiles/Code/extensions.txt` plus local `.vsix` packages such as the AUPLC Back-to-Hub extension. Before adding or distributing additional VS Code, OpenVSX, or Marketplace extensions, confirm their licenses and marketplace terms are compatible with your deployment and redistribution model.
 
 ## Documentation
 

@@ -19,7 +19,7 @@
 
 import { memo, useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import type { Resource, Accelerator, GitHubRepo } from '@auplc/shared';
-import { isCurrentUserGitHub } from '@auplc/shared';
+import { getResourceType, getResourceTypeLabel, isCurrentUserGitHub } from '@auplc/shared';
 
 interface Props {
   resource: Resource;
@@ -118,6 +118,12 @@ export const CourseCard = memo(function CourseCard({
             )}
             <span className="resource-tag">
               {resourceTag}
+            </span>
+            <span
+              className="resource-type-badge"
+              data-resource-type={getResourceType(resource)}
+            >
+              {getResourceTypeLabel(resource)}
             </span>
             {resource.metadata?.allowGitClone && (
               <span className="git-clone-badge" title="Supports custom Git repository cloning">
