@@ -200,12 +200,13 @@ def resolve_resources_for_user(
     user: JupyterHubUser,
     team_resource_mapping: dict[str, list[str]],
     auth_mode: str,
+    all_resources: list[str],
 ) -> list[str]:
     """Resolve the resources visible to a user for UI and spawn flows."""
     username = user.name.strip()
 
     if auth_mode in ["auto-login", "dummy"]:
-        return team_resource_mapping.get("official", [])
+        return all_resources
 
     available_resources = get_resources_for_user(user, team_resource_mapping)
     if available_resources:

@@ -924,6 +924,7 @@ class ResourcesAPIHandler(APIHandler):
                 self.current_user,
                 _handler_config.get("team_resource_mapping", {}),
                 _handler_config.get("auth_mode", "auto-login"),
+                list(config.resources.images.keys()),
             )
         )
 

@@ -165,7 +165,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
     async def get_user_resources(self) -> list[str]:
         """Get available resources for the user based on their JupyterHub group memberships.
 
-        For auto-login/dummy modes, returns the "official" resource set.
+        For auto-login/dummy modes, returns all configured resources.
         For all other users, resolves resources from JupyterHub groups
         (which are synced from GitHub teams or assigned to native users
         via the auth_state_hook). Falls back to legacy pattern matching
@@ -179,7 +179,12 @@ class RemoteLabKubeSpawner(KubeSpawner):
 
         from core.groups import resolve_resources_for_user
 
-        available_resources = resolve_resources_for_user(self.user, self.team_resource_mapping, self.auth_mode)
+        available_resources = resolve_resources_for_user(
+            self.user,
+            self.team_resource_mapping,
+            self.auth_mode,
+            list(self.resource_images.keys()),
+        )
         self.log.debug(f"User '{username}' resolved resources: {available_resources}")
         return available_resources
 

@@ -117,6 +117,7 @@ def test_resolve_resources_for_user_uses_group_mapping():
         user,
         {"team-a": ["cpu", "course-a"], "team-b": ["course-a", "course-b"]},
         "multi",
+        ["cpu", "gpu", "code-cpu", "course-a", "course-b"],
     )
 
     assert set(resources) == {"cpu", "course-a", "course-b"}
@@ -130,6 +131,7 @@ def test_resolve_resources_for_user_falls_back_for_native_users():
         user,
         {"official": ["cpu"], "native-users": ["code-cpu"]},
         "multi",
+        ["cpu", "gpu", "code-cpu"],
     )
 
     assert resources == ["code-cpu"]
@@ -138,14 +140,14 @@ def test_resolve_resources_for_user_falls_back_for_native_users():
 def test_resolve_resources_for_user_denies_unmapped_github_users():
     user = DummyUser([])
 
-    resources = resolve_resources_for_user(user, {"official": ["cpu"]}, "multi")
+    resources = resolve_resources_for_user(user, {"official": ["cpu"]}, "multi", ["cpu", "gpu"])
 
     assert resources == ["none"]
 
 
-def test_resolve_resources_for_user_uses_official_resources_for_auto_login():
+def test_resolve_resources_for_user_uses_all_resources_for_auto_login():
     user = DummyUser([], name="demo-user")
 
-    resources = resolve_resources_for_user(user, {"official": ["cpu", "gpu"]}, "auto-login")
+    resources = resolve_resources_for_user(user, {"official": ["cpu"]}, "auto-login", ["cpu", "gpu", "code-cpu"])
 
-    assert resources == ["cpu", "gpu"]
+    assert resources == ["cpu", "gpu", "code-cpu"]
