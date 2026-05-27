@@ -177,30 +177,11 @@ class RemoteLabKubeSpawner(KubeSpawner):
         username = self.user.name.strip()
         self.log.debug(f"Resolving resources for user: {username}")
 
-        # Auto-login or dummy mode: grant all resources
-        if self.auth_mode in ["auto-login", "dummy"]:
-            self.log.debug(f"Auth mode '{self.auth_mode}': granting all resources")
-            return self.team_resource_mapping.get("official", [])
+        from core.groups import resolve_resources_for_user
 
-        # Resolve resources from JupyterHub groups
-        from core.groups import get_resources_for_user
-
-        available_resources = get_resources_for_user(self.user, self.team_resource_mapping)
-
-        if available_resources:
-            self.log.debug(f"User '{username}' resources from groups: {available_resources}")
-            return available_resources
-
-        # Defensive fallback: auth_state_hook should have already assigned
-        # native users to the "native-users" group, but if that failed for
-        # any reason, fall back to the mapping entry directly.
-        if not username.startswith("github:"):
-            self.log.debug(f"Native user '{username}' has no groups, using default fallback")
-            return self.team_resource_mapping.get("native-users", self.team_resource_mapping.get("official", []))
-
-        # GitHub user with no matching groups
-        self.log.debug(f"No resources found for user '{username}', set to none")
-        return ["none"]
+        available_resources = resolve_resources_for_user(self.user, self.team_resource_mapping, self.auth_mode)
+        self.log.debug(f"User '{username}' resolved resources: {available_resources}")
+        return available_resources
 
     async def options_form(self, _) -> str:
         """Generate the HTML form for resource selection.
