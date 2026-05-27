@@ -115,11 +115,11 @@ RUN apt-get update && \
 
 # Install ROCm PyTorch.
 #
-# The SDK apt packages use concrete gfx targets such as `gfx1103` and
-# `gfx1201`. The pip wheel index at https://repo.amd.com/rocm/whl/ still uses
-# the "long" `gfx110X-all` / `gfx120X-all` paths for generic RDNA buckets (the
-# short lowercase paths return 403), so image targets still map to wheel
-# targets below.
+# The SDK apt packages accept the same generic RDNA bucket names as GPU_TARGET,
+# such as `gfx110x` and `gfx120x`. The pip wheel index at
+# https://repo.amd.com/rocm/whl/ uses the "long" `gfx110X-all` /
+# `gfx120X-all` paths for those buckets (the short lowercase paths return 403),
+# so image targets still map to wheel targets below.
 #
 # CI passes PYTORCH_WHL_TARGET explicitly via .github/build-config.json. For
 # local builds driven by dockerfiles/Makefile or auplc-installer — which only

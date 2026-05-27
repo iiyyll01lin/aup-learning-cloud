@@ -21,14 +21,7 @@ MIRROR_NPM ?=
 # wheel path (gfx110X-all / gfx120X-all for the RDNA 3 / RDNA 4 buckets).
 GPU_TARGET ?= gfx1151
 
-ifeq ($(GPU_TARGET),gfx110x)
-DEFAULT_ROCM_SDK_TARGET := gfx1103
-else ifeq ($(GPU_TARGET),gfx120x)
-DEFAULT_ROCM_SDK_TARGET := gfx1201
-else
-DEFAULT_ROCM_SDK_TARGET := $(GPU_TARGET)
-endif
-ROCM_SDK_TARGET ?= $(DEFAULT_ROCM_SDK_TARGET)
+ROCM_SDK_TARGET ?= $(GPU_TARGET)
 
 # GPU base image used by course Dockerfiles (override to track a specific version)
 GPU_BASE_IMAGE ?= ghcr.io/amdresearch/auplc-base:latest

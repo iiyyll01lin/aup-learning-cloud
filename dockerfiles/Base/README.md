@@ -40,8 +40,8 @@ from AMD's multi-arch apt repository, plus ROCm-enabled PyTorch wheels.
 The `GPU_TARGET` value selects the PyTorch wheel bucket and becomes the
 image-tag suffix. The ROCm SDK is installed from the matching arch-specific
 `amdrocm-core-sdk7.13-<ROCM_SDK_TARGET>` apt package to avoid pulling every
-supported architecture into each image. Generic image buckets use a concrete
-SDK target: `gfx110x` installs `gfx1103`, and `gfx120x` installs `gfx1201`.
+supported architecture into each image. Generic image buckets use the matching
+generic SDK target, for example `gfx110x` and `gfx120x`.
 
 The pip wheel index at <https://repo.amd.com/rocm/whl/> uses the "long"
 `gfxNNNX-all` path for the generic RDNA 3 / RDNA 4 buckets; `Dockerfile.rocm`
