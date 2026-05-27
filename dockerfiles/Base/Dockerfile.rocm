@@ -37,11 +37,11 @@ ARG NB_GID=100
 #   gfx1152       RDNA 3.5 — Ryzen AI 300-series iGPU
 #   gfx120x       RDNA 4   — Radeon 9x series (dGPU)
 #
-# ROCm 7.13 ships TheRock Core SDK packages in the multi-arch apt repo. The
-# SDK is installed from the all-target meta package so the Dockerfile stays a
-# straight-line course-image baseline while GPU_TARGET selects the matching
-# PyTorch wheel bucket and image tag.
+# ROCm 7.13 ships TheRock Core SDK packages in the multi-arch apt repo.
+# GPU_TARGET selects the image tag and PyTorch wheel bucket; ROCM_SDK_TARGET
+# selects the concrete apt SDK package for size-conscious installs.
 ARG GPU_TARGET=gfx1151
+ARG ROCM_SDK_TARGET=gfx1151
 ARG ROCM_VERSION=7.13.0
 ARG PYTORCH_VERSION=2.9.1
 ARG TORCHVISION_VERSION=0.24.0
@@ -102,7 +102,7 @@ RUN echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.
 # packages install into /opt/rocm/core-<ver>/ without the standard top-level layout,
 # so hipcc and device bitcode are not found via PATH / LD_LIBRARY_PATH otherwise.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends amdrocm-core-sdk${ROCM_VERSION%.*} && \
+    apt-get install -y --no-install-recommends amdrocm-core-sdk${ROCM_VERSION%.*}-${ROCM_SDK_TARGET} && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     CORE_BASE=$(ls -d /opt/rocm/core-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1) && \
@@ -115,10 +115,11 @@ RUN apt-get update && \
 
 # Install ROCm PyTorch.
 #
-# The SDK apt package covers all ROCm 7.13 targets. The pip wheel index at
-# https://repo.amd.com/rocm/whl/ still uses the "long" `gfx110X-all` /
-# `gfx120X-all` paths for generic RDNA buckets (the short lowercase paths
-# return 403), so image targets still map to wheel targets below.
+# The SDK apt packages use concrete gfx targets such as `gfx1103` and
+# `gfx1201`. The pip wheel index at https://repo.amd.com/rocm/whl/ still uses
+# the "long" `gfx110X-all` / `gfx120X-all` paths for generic RDNA buckets (the
+# short lowercase paths return 403), so image targets still map to wheel
+# targets below.
 #
 # CI passes PYTORCH_WHL_TARGET explicitly via .github/build-config.json. For
 # local builds driven by dockerfiles/Makefile or auplc-installer — which only

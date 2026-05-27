@@ -37,12 +37,16 @@ from AMD's multi-arch apt repository, plus ROCm-enabled PyTorch wheels.
 | gfx1152       | RDNA 3.5 | Ryzen AI 300-series iGPU        | gfx1152                  |
 | gfx120x       | RDNA 4   | gfx1201 (dGPU: RX 9070 XT, R9700, RX 9600 GRE, …) | gfx120X-all |
 
-The ROCm SDK is installed from the all-target `amdrocm-core-sdk7.13` apt meta
-package. The `GPU_TARGET` value selects the PyTorch wheel bucket and becomes
-the image-tag suffix. The pip wheel index at <https://repo.amd.com/rocm/whl/>
-uses the "long" `gfxNNNX-all` path for the generic RDNA 3 / RDNA 4 buckets;
-`Dockerfile.rocm` maps short → long automatically. CI passes
-`PYTORCH_WHL_TARGET` explicitly (see `.github/build-config.json`).
+The `GPU_TARGET` value selects the PyTorch wheel bucket and becomes the
+image-tag suffix. The ROCm SDK is installed from the matching arch-specific
+`amdrocm-core-sdk7.13-<ROCM_SDK_TARGET>` apt package to avoid pulling every
+supported architecture into each image. Generic image buckets use a concrete
+SDK target: `gfx110x` installs `gfx1103`, and `gfx120x` installs `gfx1201`.
+
+The pip wheel index at <https://repo.amd.com/rocm/whl/> uses the "long"
+`gfxNNNX-all` path for the generic RDNA 3 / RDNA 4 buckets; `Dockerfile.rocm`
+maps short → long automatically. CI passes `PYTORCH_WHL_TARGET` and
+`ROCM_SDK_TARGET` explicitly (see `.github/build-config.json`).
 
 The baseline PyTorch stack follows AMD's ROCm 7.13.0 wheel set while keeping
 the existing course-facing framework versions: `torch==2.9.1+rocm7.13.0`,
@@ -56,6 +60,7 @@ docker build -t ghcr.io/amdresearch/auplc-base:latest --file Dockerfile.rocm .
 
 # Specific target
 docker build --build-arg GPU_TARGET=gfx120x \
+  --build-arg ROCM_SDK_TARGET=gfx1201 \
   -t ghcr.io/amdresearch/auplc-base:latest-gfx120x --file Dockerfile.rocm .
 
 # Using make (from dockerfiles/ directory)

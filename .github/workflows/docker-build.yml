@@ -538,9 +538,11 @@ jobs:
         id: suffix
         run: |
           echo "tag_suffix=${{ matrix.gpu_target }}" >> "$GITHUB_OUTPUT"
-          # Look up pytorch_whl from gpu-map; fall back to gpu_target if not found
+          # Look up target-specific build metadata; fall back to gpu_target if not found
           WHL=$(echo '${{ needs.changes.outputs.gpu-map }}' | jq -r --arg t "${{ matrix.gpu_target }}" '.[] | select(.name == $t) | .pytorch_whl // .name')
+          SDK=$(echo '${{ needs.changes.outputs.gpu-map }}' | jq -r --arg t "${{ matrix.gpu_target }}" '.[] | select(.name == $t) | .rocm_sdk // .name')
           echo "pytorch_whl=${WHL}" >> "$GITHUB_OUTPUT"
+          echo "rocm_sdk=${SDK}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -603,6 +605,7 @@ jobs:
           labels: ${{ steps.meta-suffixed.outputs.labels }}
           build-args: |
             GPU_TARGET=${{ matrix.gpu_target }}
+            ROCM_SDK_TARGET=${{ steps.suffix.outputs.rocm_sdk }}
             PYTORCH_WHL_TARGET=${{ steps.suffix.outputs.pytorch_whl }}
           cache-from: type=gha,scope=base-gpu-${{ matrix.gpu_target }}
           cache-to: type=gha,mode=max,scope=base-gpu-${{ matrix.gpu_target }}
