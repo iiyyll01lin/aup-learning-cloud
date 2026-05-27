@@ -61,6 +61,7 @@ def load_module(name: str, path: Path):
 
 
 groups = load_module("core.groups", CORE / "groups.py")
+resolve_resources_for_user = groups.resolve_resources_for_user
 sync_user_github_teams = groups.sync_user_github_teams
 
 
@@ -76,8 +77,8 @@ class DummyOrmUser:
 
 
 class DummyUser:
-    def __init__(self, groups):
-        self.name = "github:test"
+    def __init__(self, groups, name="github:test"):
+        self.name = name
         self.orm_user = DummyOrmUser(groups)
 
 
@@ -107,3 +108,44 @@ def test_sync_user_github_teams_skips_removals_when_team_fetch_failed():
     sync_user_github_teams(user, None, {"team-a"}, DummyDb())
 
     assert user.orm_user.groups == [existing_group]
+
+
+def test_resolve_resources_for_user_uses_group_mapping():
+    user = DummyUser([DummyGroup("team-a"), DummyGroup("team-b")])
+
+    resources = resolve_resources_for_user(
+        user,
+        {"team-a": ["cpu", "course-a"], "team-b": ["course-a", "course-b"]},
+        "multi",
+    )
+
+    assert set(resources) == {"cpu", "course-a", "course-b"}
+    assert resources.count("course-a") == 1
+
+
+def test_resolve_resources_for_user_falls_back_for_native_users():
+    user = DummyUser([], name="native-user")
+
+    resources = resolve_resources_for_user(
+        user,
+        {"official": ["cpu"], "native-users": ["code-cpu"]},
+        "multi",
+    )
+
+    assert resources == ["code-cpu"]
+
+
+def test_resolve_resources_for_user_denies_unmapped_github_users():
+    user = DummyUser([])
+
+    resources = resolve_resources_for_user(user, {"official": ["cpu"]}, "multi")
+
+    assert resources == ["none"]
+
+
+def test_resolve_resources_for_user_uses_official_resources_for_auto_login():
+    user = DummyUser([], name="demo-user")
+
+    resources = resolve_resources_for_user(user, {"official": ["cpu", "gpu"]}, "auto-login")
+
+    assert resources == ["cpu", "gpu"]
