@@ -76,10 +76,10 @@ sudo apt install python3-questionary   # optional; improves the TUI prompts
 ```bash
 git clone https://github.com/AMDResearch/aup-learning-cloud.git
 cd aup-learning-cloud
-./auplc-installer install
+./auplc-installer install --image-tag=develop
 ```
 
-The installer runs as your user and prompts for sudo once when root access is needed. By default it **pulls** pre-built images from GitHub Container Registry (`ghcr.io/amdresearch` unless overridden): it auto-detects your AMD GPU model, then pulls the matching GPU-specific image tags (for example `develop-gfx1150` on Strix Point).
+The installer runs as your user and prompts for sudo once when root access is needed. By default it **pulls** pre-built images from GitHub Container Registry (`ghcr.io/amdresearch` unless you override `--image-registry`). It **auto-detects your AMD GPU** (via `rocminfo` or KFD topology), then pulls the **GPU-matched image tags** for that hardware—for example `auplc-base:develop-gfx1150` on Strix Point, or `auplc-cv:develop-gfx1151` on Strix Halo.
 
 A successful install looks like this:
 
@@ -94,19 +94,27 @@ This operation needs root privileges. Requesting sudo password...
   ✓ [7/8] Refreshing values overlay from node labels  (0.2s)
   ✓ [8/8] Deploying JupyterHub runtime (helm install + wait)  (9.2s)
 
-
-   _    _   _ ____    _                          _                  ____ _                 _
-  / \  | | | |  _ \  | |    ___  __ _ _ __ _ __ (_)_ __   __ _     / ___| | ___  _   _  __| |
- / _ \ | | | | |_) | | |   / _ \/ _` | '__| '_ \| | '_ \ / _` |   | |   | |/ _ \| | | |/ _` |
-/ ___ \| |_| |  __/  | |__|  __/ (_| | |  | | | | | | | | (_| |   | |___| | (_) | |_| | (_| |
-/_/   \_\___/|_|     |_____\___|\__,_|_|  |_| |_|_|_| |_|\__, |    \____|_|\___/ \__,_|\__,_|
-                                                         |___/
     You have successfully installed AUP Learning Cloud!
 
     Open in your browser: http://localhost:30890
     (auto-logged-in as 'student' — no login needed)
 
     kubectl is configured at $HOME/.kube/config; try `kubectl get nodes`
+```
+
+Preview the plan without installing:
+
+```bash
+./auplc-installer install --dry-run --image-tag=develop
+```
+
+Common options:
+
+```bash
+./auplc-installer install --gpu=strix-halo              # override GPU detection
+./auplc-installer install --image-source=build          # build images locally instead of pull
+./auplc-installer install --runtime=containerd          # portable/offline-oriented K3s runtime
+./auplc-installer install --mirror=mirror.example.com   # registry mirror
 ```
 
 See the full guide at [Quick Start](https://amdresearch.github.io/aup-learning-cloud/installation/quick-start.html) and [Single-Node Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html).
