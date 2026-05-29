@@ -40,6 +40,7 @@ from auplc_installer.pack import pack_bundle
 from auplc_installer.progress import stage
 from auplc_installer.rocm import deploy_rocm_gpu_device_plugin
 from auplc_installer.state import InstallerState
+from auplc_installer.summary import format_configuration_summary, resolve_install_image_source
 from auplc_installer.util import (
     InstallerError,
     ensure_sudo_session,
@@ -73,12 +74,16 @@ Commands:
                         optional `questionary` package is not installed.
 
   install [--pull]      Full installation (k3s + images + runtime)
-                        Default: build images locally via Makefile
-                        --pull: use pre-built images from GHCR (no local build needed)
+                        Default: pull pre-built images from --image-registry
+                        --pull: legacy alias for --image-source=pull
+                        --image-source=build: build via dockerfiles/Makefile
+
+  install --dry-run     Show Configuration summary without making changes
+                        (also accepts --try-run). No sudo required.
 
   pack [--local]        Create offline deployment bundle (requires Docker + internet)
-                        Default: pull pre-built images from GHCR
-                        --local: build images locally then pack (needs build deps)
+                        Default: pull pre-built images from registry
+                        --local: legacy alias for building locally before pack
 
   uninstall             Remove everything (K3s + runtime)
   install-tools         Install helm and k9s
@@ -101,6 +106,7 @@ Commands:
 
 Options (can also be set via environment variables):
   --gpu=TYPE        Override auto-detected GPU type. Accepts:
+                      auto       - auto-detect (same as omitting the flag)
                       phx        - Phoenix Point iGPU (gfx1100..gfx1103)
                       strix      - Strix Point iGPU (gfx1150)
                       strix-halo - Strix Halo iGPU (gfx1151)
@@ -112,10 +118,28 @@ Options (can also be set via environment variables):
                     Auto-detection uses rocminfo or KFD topology.
                     Env: GPU_TYPE
 
+  --runtime=MODE    K3s container runtime: docker (default) or containerd.
+                    Env: K3S_USE_DOCKER (1 = docker, 0 = containerd)
+                    Legacy: --docker=0|1 (still supported; --runtime wins)
+
+  --image-source=SRC  Custom image acquisition for install:
+                      pull  - fetch pre-built images from --image-registry
+                      build - build from dockerfiles/ via Makefile
+                    Default: pull. Legacy: ghcr is an alias for pull;
+                    install --pull is an alias for --image-source=pull
+
+  --image-registry=PREFIX
+                    Registry prefix for custom images (default: ghcr.io/amdresearch)
+                    Env: IMAGE_REGISTRY
+
+  --image-tag=TAG   Custom-image tag prefix (default: latest). GPU suffix
+                    appended automatically. Env: IMAGE_TAG
+
   --docker=0|1      Use host Docker as K3s container runtime (default: 1).
                     1 = Docker mode: images visible to K3s immediately.
                     0 = containerd mode: images exported for offline use.
                     Env: K3S_USE_DOCKER
+                    Prefer --runtime=docker|containerd for new scripts.
 
   --courses=SPEC    Restrict the install/pack to a subset of courses. Affects
                     image build/pull AND the rendered values.local.yaml so
@@ -130,6 +154,10 @@ Options (can also be set via environment variables):
   -y, --yes         Assume yes to all prompts (for scripted/CI use).
                     Env: AUPLC_YES=1
 
+  --dry-run, --try-run
+                    With ``install``: print Configuration summary and exit.
+                    Does not prompt for sudo or change the system.
+
   -v, --verbose     Stream every subprocess line live (default is a quiet
                     "progress-bar" mode where only stage labels show, and
                     captured output is dumped only when a command fails).
@@ -142,22 +170,24 @@ Options (can also be set via environment variables):
 
   Examples:
     ./auplc-installer tui                              # interactive wizard
+    ./auplc-installer install --dry-run                # preview defaults
+    ./auplc-installer install --image-source=pull --image-tag=develop
+    ./auplc-installer install --runtime=containerd --image-source=build
     ./auplc-installer install --gpu=strix-halo
-    ./auplc-installer install --gpu=phx --docker=0
+    ./auplc-installer install --gpu=auto --dry-run
+    ./auplc-installer install --gpu=phx --docker=0     # legacy flags
     ./auplc-installer install --courses=basic          # cpu + gpu only
     ./auplc-installer install --courses=cpu,gpu,Course-CV
     ./auplc-installer img build base-rocm --gpu=strix
     ./auplc-installer install --mirror=mirror.example.com
 
-Image Registry:
-  IMAGE_REGISTRY  Registry prefix for custom images (default: ghcr.io/amdresearch)
-                  Override when pulling from a fork or private registry.
-  IMAGE_TAG       Image tag prefix (default: latest). GPU suffix appended automatically.
-                  Use "develop" for images built from the develop branch.
+Image Registry (legacy env-only aliases still work):
+  IMAGE_REGISTRY  Same as --image-registry (default: ghcr.io/amdresearch)
+  IMAGE_TAG       Same as --image-tag (default: latest)
 
 Offline Deployment:
   1. On a machine with internet access, create bundle:
-       ./auplc-installer pack --gpu=strix-halo          # pull from GHCR
+       ./auplc-installer pack --gpu=strix-halo          # pull from registry
        ./auplc-installer pack --gpu=strix-halo --local   # or build locally
 
   2. Transfer bundle to air-gapped machine, then:
@@ -186,12 +216,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     # Global flags
     p.add_argument("--gpu", dest="gpu_type", default=None)
+    p.add_argument("--runtime", dest="runtime", default=None)
     p.add_argument("--docker", dest="use_docker", default=None)
+    p.add_argument("--image-source", dest="image_source", default=None)
+    p.add_argument("--image-registry", dest="image_registry", default=None)
+    p.add_argument("--image-tag", dest="image_tag", default=None)
     p.add_argument("--mirror", dest="mirror_prefix", default=None)
     p.add_argument("--mirror-pip", dest="mirror_pip", default=None)
     p.add_argument("--mirror-npm", dest="mirror_npm", default=None)
     p.add_argument("--courses", dest="courses", default=None)
     p.add_argument("-y", "--yes", dest="assume_yes", action="store_true")
+    p.add_argument("--dry-run", "--try-run", dest="dry_run", action="store_true")
     p.add_argument(
         "-v",
         "--verbose",
@@ -208,9 +243,23 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _apply_global_flags(state: InstallerState, args: argparse.Namespace) -> None:
     if args.gpu_type is not None:
-        state.gpu_type = args.gpu_type
-    if args.use_docker is not None:
+        state.gpu_type = "" if args.gpu_type.lower() == "auto" else args.gpu_type
+    if args.runtime is not None:
+        runtime = args.runtime.lower()
+        if runtime == "docker":
+            state.use_docker = True
+        elif runtime == "containerd":
+            state.use_docker = False
+        else:
+            raise InstallerError(f"Unknown --runtime={args.runtime!r} (expected docker or containerd)")
+    elif args.use_docker is not None:
         state.use_docker = args.use_docker not in ("0", "false", "False")
+    if args.image_source is not None:
+        state.image_source = args.image_source
+    if args.image_registry is not None:
+        state.image_registry = args.image_registry
+    if args.image_tag is not None:
+        state.image_tag = args.image_tag
     if args.mirror_prefix is not None:
         state.mirror_prefix = args.mirror_prefix
     if args.mirror_pip is not None:
@@ -225,6 +274,25 @@ def _apply_global_flags(state: InstallerState, args: argparse.Namespace) -> None
         state.verbose = True
     # Propagate verbose flag to util.run_streaming.
     set_verbose(state.verbose)
+
+
+def _install_pull_and_label(
+    state: InstallerState,
+    *,
+    legacy_pull: bool,
+) -> tuple[bool, str]:
+    return resolve_install_image_source(
+        image_source=state.image_source,
+        legacy_pull=legacy_pull,
+        offline_mode=state.offline_mode,
+        bundle_dir=state.bundle_dir,
+    )
+
+
+def cmd_install_plan(state: InstallerState, *, legacy_pull: bool = False) -> None:
+    """Print the install Configuration summary without side effects."""
+    _, label = _install_pull_and_label(state, legacy_pull=legacy_pull)
+    sys.stdout.write(format_configuration_summary(state, image_source_label=label) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +321,7 @@ def cmd_install(state: InstallerState, *, pull: bool) -> None:
 def _cmd_install_inner(state: InstallerState, *, pull: bool) -> None:
     """Body of ``cmd_install`` after sudo session has been primed."""
     # Pre-compute the image-stage label so the user knows up-front which path
-    # the installer is taking (offline / GHCR pull / local build).
+    # the installer is taking (offline / pull / build).
     if state.offline_mode:
         image_stage_label = "Loading images from offline bundle"
     elif pull:
@@ -655,6 +723,13 @@ def _resolve_source_root() -> Path:
 
 def main(argv: Sequence[str] | None = None) -> None:
     argv = list(argv) if argv is not None else sys.argv[1:]
+
+    # Custom help text (add_help=False on the parser). Intercept -h/--help
+    # before argparse runs so `./auplc-installer --help` works as users expect.
+    if any(tok in ("-h", "--help") for tok in argv):
+        show_help()
+        return
+
     parser = _build_parser()
 
     # Argparse refuses positional + --foo=bar interleaving in some edge
@@ -667,12 +742,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     for tok in argv:
         if (
             tok.startswith("--gpu=")
+            or tok.startswith("--runtime=")
             or tok.startswith("--docker=")
+            or tok.startswith("--image-source=")
+            or tok.startswith("--image-registry=")
+            or tok.startswith("--image-tag=")
             or tok.startswith("--mirror=")
             or tok.startswith("--mirror-pip=")
             or tok.startswith("--mirror-npm=")
             or tok.startswith("--courses=")
-            or tok in ("-y", "--yes", "-v", "--verbose", "--version")
+            or tok in ("-y", "--yes", "-v", "--verbose", "--version", "--dry-run", "--try-run")
         ):
             flags.append(tok)
         else:
@@ -684,7 +763,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         state = InstallerState.from_environment(script_dir=script_dir)
         _apply_global_flags(state, args)
-        _dispatch(args.command, list(args.rest), state, source_root=script_dir)
+        _dispatch(args.command, list(args.rest), state, source_root=script_dir, dry_run=args.dry_run)
     except InstallerError as exc:
         log_error(str(exc))
         sys.exit(1)
@@ -699,6 +778,7 @@ def _dispatch(
     state: InstallerState,
     *,
     source_root: Path,
+    dry_run: bool = False,
 ) -> None:
     # Default behaviour when invoked with no subcommand: launch the TUI in
     # an interactive terminal, fall back to printing help in a piped /
@@ -720,9 +800,19 @@ def _dispatch(
         return
 
     if cmd == "install":
-        pull = bool(rest) and rest[0] == "--pull"
+        legacy_pull = "--pull" in rest
+        rest = [t for t in rest if t != "--pull"]
+        if rest:
+            raise InstallerError(f"Unexpected install argument(s): {' '.join(rest)}")
+        if dry_run:
+            cmd_install_plan(state, legacy_pull=legacy_pull)
+            return
+        pull, _ = _install_pull_and_label(state, legacy_pull=legacy_pull)
         cmd_install(state, pull=pull)
         return
+
+    if dry_run:
+        raise InstallerError("--dry-run is only supported with the install command")
 
     if cmd == "pack":
         local_build = bool(rest) and rest[0] == "--local"

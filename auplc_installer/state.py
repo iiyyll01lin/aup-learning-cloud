@@ -45,6 +45,10 @@ class InstallerState:
     image_registry: str = DEFAULT_IMAGE_REGISTRY
     image_tag: str = DEFAULT_IMAGE_TAG
 
+    # Install image acquisition override (CLI --image-source=pull|build).
+    # None => default ``pull`` (matches TUI); legacy ``install --pull`` also selects pull.
+    image_source: str | None = None
+
     # Course selection (drives image filtering + teams.mapping override)
     courses: CourseSelection = field(default_factory=CourseSelection.default)
 
