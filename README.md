@@ -76,10 +76,8 @@ sudo apt install python3-questionary   # optional; improves the TUI prompts
 ```bash
 git clone https://github.com/AMDResearch/aup-learning-cloud.git
 cd aup-learning-cloud
-./auplc-installer install --image-tag=develop
+./auplc-installer install
 ```
-
-The installer runs as your user and prompts for sudo once when root access is needed. By default it **pulls** pre-built images from GitHub Container Registry (`ghcr.io/amdresearch` unless you override `--image-registry`). It **auto-detects your AMD GPU** (via `rocminfo` or KFD topology), then pulls the **GPU-matched image tags** for that hardware—for example `auplc-base:develop-gfx1150` on Strix Point, or `auplc-cv:develop-gfx1151` on Strix Halo.
 
 A successful install looks like this:
 
@@ -94,27 +92,18 @@ This operation needs root privileges. Requesting sudo password...
   ✓ [7/8] Refreshing values overlay from node labels  (0.2s)
   ✓ [8/8] Deploying JupyterHub runtime (helm install + wait)  (9.2s)
 
+   _    _   _ ____    _                          _                  ____ _                 _
+  / \  | | | |  _ \  | |    ___  __ _ _ __ _ __ (_)_ __   __ _     / ___| | ___  _   _  __| |
+ / _ \ | | | | |_) | | |   / _ \/ _` | '__| '_ \| | '_ \ / _` |   | |   | |/ _ \| | | |/ _` |
+/ ___ \| |_| |  __/  | |__|  __/ (_| | |  | | | | | | | | (_| |   | |___| | (_) | |_| | (_| |
+/_/   \_\___/|_|     |_____\___|\__,_|_|  |_| |_|_|_| |_|\__, |    \____|_|\___/ \__,_|\__,_|
+                                                         |___/
     You have successfully installed AUP Learning Cloud!
 
     Open in your browser: http://localhost:30890
     (auto-logged-in as 'student' — no login needed)
 
     kubectl is configured at $HOME/.kube/config; try `kubectl get nodes`
-```
-
-Preview the plan without installing:
-
-```bash
-./auplc-installer install --dry-run --image-tag=develop
-```
-
-Common options:
-
-```bash
-./auplc-installer install --gpu=strix-halo              # override GPU detection
-./auplc-installer install --image-source=build          # build images locally instead of pull
-./auplc-installer install --runtime=containerd          # portable/offline-oriented K3s runtime
-./auplc-installer install --mirror=mirror.example.com   # registry mirror
 ```
 
 See the full guide at [Quick Start](https://amdresearch.github.io/aup-learning-cloud/installation/quick-start.html) and [Single-Node Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html).
@@ -188,12 +177,10 @@ Current environments are configured via `custom.resources.images` in `runtime/va
 
 The `auplc-default`, `auplc-base`, and `Course-*` images remain notebook and course focused. Browser-based coding is provided by generic code-server images instead of per-course VS Code image variants. Resources launch code-server when their `custom.resources.metadata.<resource>.launchMode` is set to `code-server`; the default configuration uses `code-cpu` for CPU-only coding workspaces and `code-gpu` for GPU-accelerated coding workspaces.
 
-Build the generic coding images from the repository root with:
+Build the images:
 
 ```bash
-make -C dockerfiles code-cpu
-make -C dockerfiles code-gpu GPU_TARGET=gfx1151
-make -C dockerfiles code
+./auplc-installer img build base-rocm --gpu=strix
 ```
 
 The code-server container starts on port `8888` with `code-server --auth none`. This is safe only when the user pod is reachable exclusively through JupyterHub and the JupyterHub proxy authentication boundary. Do not expose the code-server pod port directly through a NodePort, LoadBalancer, ingress, or other unauthenticated route.
