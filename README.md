@@ -61,25 +61,68 @@ sudo apt install build-essential
 > **Docker note**: See [Docker Post-installation Steps](https://docs.docker.com/engine/install/linux-postinstall/) and [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for details.
 
 ### Installation
+
+**Interactive (recommended):**
+
 ```bash
 git clone https://github.com/AMDResearch/aup-learning-cloud.git
 cd aup-learning-cloud
-sudo ./auplc-installer install
+sudo apt install python3-questionary   # optional; improves the TUI prompts
+./auplc-installer                      # pick Install, accept defaults, set Image tag to develop
 ```
-After installation completes, open http://localhost:30890 in your browser. No login credentials are required - you will be automatically logged in.
+
+**Non-interactive:**
+
+```bash
+git clone https://github.com/AMDResearch/aup-learning-cloud.git
+cd aup-learning-cloud
+./auplc-installer install --image-tag=develop
+```
+
+The installer runs as your user and prompts for sudo once when root access is needed. By default it **pulls** pre-built images from the configured registry (`ghcr.io/amdresearch` unless overridden).
+
+A successful install looks like this:
+
+```text
+This operation needs root privileges. Requesting sudo password...
+  ✓ [1/8] Detecting GPU  (0.2s)
+  ✓ [2/8] Generating values overlay (initial)  (0.0s)
+  ✓ [3/8] Installing helm + k9s  (0.0s)
+  ✓ [4/8] Installing K3s (single-node)  (3.8s)
+  ✓ [5/8] Pulling custom + external images  (25.0s)
+  ✓ [6/8] Deploying ROCm GPU device plugin + node labeller  (0.2s)
+  ✓ [7/8] Refreshing values overlay from node labels  (0.2s)
+  ✓ [8/8] Deploying JupyterHub runtime (helm install + wait)  (9.2s)
+
+    You have successfully installed AUP Learning Cloud!
+
+    Open in your browser: http://localhost:30890
+    (auto-logged-in as 'student' — no login needed)
+
+    kubectl is configured at $HOME/.kube/config; try `kubectl get nodes`
+```
+
+Preview the plan without installing:
+
+```bash
+./auplc-installer install --dry-run --image-tag=develop
+```
 
 Common options:
+
 ```bash
-sudo ./auplc-installer install --gpu=strix-halo   # specify GPU type
-sudo ./auplc-installer install --docker=0          # use containerd instead of Docker
-sudo ./auplc-installer install --mirror=mirror.example.com  # use registry mirror
+./auplc-installer install --gpu=strix-halo              # override GPU detection
+./auplc-installer install --image-source=build        # build images locally instead of pull
+./auplc-installer install --runtime=containerd          # portable/offline-oriented K3s runtime
+./auplc-installer install --mirror=mirror.example.com # registry mirror
 ```
 
-See more at [link](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html#runtime-and-mirror-configuration)
+See the full guide at [Quick Start](https://amdresearch.github.io/aup-learning-cloud/installation/quick-start.html) and [Single-Node Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html).
 
 ### Uninstall
+
 ```bash
-sudo ./auplc-installer uninstall
+./auplc-installer uninstall
 ```
 
 ## Cluster Installation
