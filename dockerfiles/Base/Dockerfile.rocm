@@ -28,18 +28,21 @@ ARG NB_USER=jovyan
 ARG NB_UID=1000
 ARG NB_GID=100
 
-# GPU target and ROCm version — override at build time
+# GPU target and ROCm baseline
 #
 # Supported GPU_TARGET values:
 #   gfx110x       RDNA 3   — gfx1100/1101/1102/1103 (dGPU)
 #   gfx1150       RDNA 3.5 — Radeon 890M (Strix Point iGPU)
 #   gfx1151       RDNA 3.5 — Radeon 8060S (Strix Halo iGPU)
+#   gfx1152       RDNA 3.5 — Ryzen AI 300-series iGPU
 #   gfx120x       RDNA 4   — Radeon 9x series (dGPU)
 #
-# The tarball and wheel URLs are derived from GPU_TARGET automatically.
-# Use ROCM_TARBALL_URL / PYTORCH_INDEX_URL to override for edge cases.
+# ROCm 7.13 ships TheRock Core SDK packages in the Ubuntu apt repo.
+# GPU_TARGET selects the image tag and PyTorch wheel bucket; ROCM_SDK_TARGET
+# selects the concrete apt SDK package for size-conscious installs.
 ARG GPU_TARGET=gfx1151
-ARG ROCM_VERSION=7.12.0
+ARG ROCM_SDK_TARGET=gfx1151
+ARG ROCM_VERSION=7.13.0
 ARG PYTORCH_VERSION=2.9.1
 ARG TORCHVISION_VERSION=0.24.0
 ARG TORCHAUDIO_VERSION=2.9.0
@@ -94,28 +97,30 @@ RUN mkdir -p /etc/apt/keyrings && \
 RUN echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] https://repo.amd.com/rocm/packages/ubuntu2404 stable main' \
     > /etc/apt/sources.list.d/rocm.list
 
-# Install ROCm from apt (package name uses GPU_TARGET, e.g. amdrocm7.12-gfx110X-all)
+# Install ROCm from apt.
 # After install, create standard /opt/rocm/{bin,lib,include} symlinks — the amdrocm
 # packages install into /opt/rocm/core-<ver>/ without the standard top-level layout,
 # so hipcc and device bitcode are not found via PATH / LD_LIBRARY_PATH otherwise.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends amdrocm${ROCM_VERSION%.*}-${GPU_TARGET} && \
+    apt-get install -y --no-install-recommends amdrocm-core-sdk${ROCM_VERSION%.*}-${ROCM_SDK_TARGET} && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     CORE_BASE=$(ls -d /opt/rocm/core-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1) && \
     if [ -n "$CORE_BASE" ]; then \
         for d in bin lib include libexec share; do \
-            [ ! -e /opt/rocm/$d ] && [ -e "$CORE_BASE/$d" ] && \
+            if [ ! -e /opt/rocm/$d ] && [ -e "$CORE_BASE/$d" ]; then \
                 ln -s "$CORE_BASE/$d" /opt/rocm/$d; \
+            fi; \
         done; \
     fi
 
 # Install ROCm PyTorch.
 #
-# The apt and pip repos do NOT use the same naming convention for the generic
-# RDNA buckets: apt ships `amdrocm<ver>-gfx110x` / `amdrocm<ver>-gfx120x`, but
-# the pip wheel index at https://repo.amd.com/rocm/whl/ only serves the
-# `gfx110X-all` / `gfx120X-all` paths (the short lowercase paths return 403).
+# The SDK apt packages accept the same generic RDNA bucket names as GPU_TARGET,
+# such as `gfx110x` and `gfx120x`. The pip wheel index at
+# https://repo.amd.com/rocm/whl/ uses the "long" `gfx110X-all` /
+# `gfx120X-all` paths for those buckets (the short lowercase paths return 403),
+# so image targets still map to wheel targets below.
 #
 # CI passes PYTORCH_WHL_TARGET explicitly via .github/build-config.json. For
 # local builds driven by dockerfiles/Makefile or auplc-installer — which only

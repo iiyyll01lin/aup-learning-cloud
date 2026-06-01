@@ -67,6 +67,7 @@ on:
           - gfx110x
           - gfx1150
           - gfx1151
+          - gfx1152
           - gfx120x
 
 # Build matrix is defined in .github/build-config.json
@@ -489,9 +490,9 @@ jobs:
   # ──────────────────────────────────────────────
   # Base GPU Image (multi-target via GPU_TARGET)
   #
-  # No GPU hardware required — only downloads ROCm tarball + pip wheels.
+  # No GPU hardware required — only installs ROCm apt packages + pip wheels.
   # Uses free-disk-space action to reclaim runner disk for the large image.
-  # Builds 5 GPU targets in parallel via matrix strategy.
+  # Builds GPU targets in parallel via matrix strategy.
   # ──────────────────────────────────────────────
   build-base-gpu:
     name: "Build Base GPU Image (${{ matrix.gpu_target }})"
@@ -537,9 +538,11 @@ jobs:
         id: suffix
         run: |
           echo "tag_suffix=${{ matrix.gpu_target }}" >> "$GITHUB_OUTPUT"
-          # Look up pytorch_whl from gpu-map; fall back to gpu_target if not found
+          # Look up target-specific build metadata; fall back to gpu_target if not found
           WHL=$(echo '${{ needs.changes.outputs.gpu-map }}' | jq -r --arg t "${{ matrix.gpu_target }}" '.[] | select(.name == $t) | .pytorch_whl // .name')
+          SDK=$(echo '${{ needs.changes.outputs.gpu-map }}' | jq -r --arg t "${{ matrix.gpu_target }}" '.[] | select(.name == $t) | .rocm_sdk // .name')
           echo "pytorch_whl=${WHL}" >> "$GITHUB_OUTPUT"
+          echo "rocm_sdk=${SDK}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -602,6 +605,7 @@ jobs:
           labels: ${{ steps.meta-suffixed.outputs.labels }}
           build-args: |
             GPU_TARGET=${{ matrix.gpu_target }}
+            ROCM_SDK_TARGET=${{ steps.suffix.outputs.rocm_sdk }}
             PYTORCH_WHL_TARGET=${{ steps.suffix.outputs.pytorch_whl }}
           cache-from: type=gha,scope=base-gpu-${{ matrix.gpu_target }}
           cache-to: type=gha,mode=max,scope=base-gpu-${{ matrix.gpu_target }}
@@ -622,7 +626,7 @@ jobs:
   # BASE_IMAGE build-arg overrides the default so course images
   # can track the latest GPU base image version from CI.
   #
-  # Each course is built for all 5 GPU targets (course × gpu_target matrix).
+  # Each course is built for every configured GPU target (course × gpu_target matrix).
   # ──────────────────────────────────────────────
   build-courses:
     name: "Build Course: ${{ matrix.course }} (${{ matrix.gpu_target }})"

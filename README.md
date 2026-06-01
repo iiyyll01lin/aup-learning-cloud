@@ -36,7 +36,7 @@ The simplest way to deploy AUP Learning Cloud on a single machine in a developme
 - **Hardware**: Supported **Ryzen AI 300 series and above** APUs and **Radeon 9000 series** PCIe GPUs.
 - **Memory**: 32GB+ RAM (64GB recommended)
 - **Storage**: 500GB+ SSD
-- **OS**: Ubuntu 24.04.3 LTS
+- **OS**: Ubuntu 24.04.4 LTS
 - **Docker**: Install Docker and configure for non-root access
 - **TUI deps**: `python3-questionary` and `python3-prompt-toolkit` (apt) for the recommended interactive installer; conda/venv users use `pip install questionary prompt_toolkit`
 
@@ -60,7 +60,7 @@ sudo apt install build-essential
 sudo apt install python3-questionary python3-prompt-toolkit
 ```
 
-> **Kernel note** (Ryzen AI APU only): The OEM kernel package follows AMD ROCm's Ryzen APU installation guidance for Ubuntu 24.04. See the [ROCm installation guide for Ryzen APUs](https://rocm.docs.amd.com/en/7.12.0/install/rocm.html?fam=ryzen&gpu=max-pro-395&os=ubuntu&os-version=24.04&i=pkgman) for details. Radeon dGPU systems typically use the stock Ubuntu kernel—check ROCm docs for your GPU.
+> **Kernel note** (Ryzen AI APU only): The OEM kernel package follows AMD ROCm's Ryzen APU installation guidance for Ubuntu 24.04. See the [ROCm 7.13.0 preview installation guide for Ryzen APUs](https://rocm.docs.amd.com/en/7.13.0-preview/install/rocm.html?fam=ryzen&w=compute&os=ubuntu&ubuntu-ver=24.04&i=pkgman&gpu=max-pro-395&gfx=gfx1151) for details. Radeon dGPU systems typically use the stock Ubuntu kernel—check ROCm docs for your GPU.
 >
 > **Docker note**: See [Docker Post-installation Steps](https://docs.docker.com/engine/install/linux-postinstall/) and [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for details.
 >
