@@ -17,10 +17,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export * from "./user.js";
-export * from "./quota.js";
-export * from "./accelerator.js";
-export * from "./resource.js";
-export * from "./hub.js";
-export * from "./stats.js";
-export * from "./notification.js";
+import type { NotificationsResponse } from "../types/notification.js";
+import { apiRequest } from "./client.js";
+
+export async function getNotifications(): Promise<NotificationsResponse> {
+  return apiRequest<NotificationsResponse>("/notifications");
+}

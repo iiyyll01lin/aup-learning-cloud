@@ -17,10 +17,39 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export * from "./user.js";
-export * from "./quota.js";
-export * from "./accelerator.js";
-export * from "./resource.js";
-export * from "./hub.js";
-export * from "./stats.js";
-export * from "./notification.js";
+import { describe, expect, it, vi } from "vitest";
+
+const apiRequestMock = vi.hoisted(() => vi.fn());
+
+vi.mock("./client.js", () => ({
+  apiRequest: apiRequestMock,
+}));
+
+import { getNotifications } from "./notifications.js";
+
+describe("getNotifications", () => {
+  it("requests the notifications endpoint", async () => {
+    const response = {
+      enabled: true,
+      topbar: null,
+      homepage: {
+        enabled: true,
+        legacyAnnouncementFallback: true,
+        items: [],
+      },
+    };
+
+    apiRequestMock.mockResolvedValueOnce(response);
+
+    await expect(getNotifications()).resolves.toEqual(response);
+    expect(apiRequestMock).toHaveBeenCalledTimes(1);
+    expect(apiRequestMock).toHaveBeenCalledWith("/notifications");
+  });
+
+  it("propagates api request failures", async () => {
+    apiRequestMock.mockRejectedValueOnce(new Error("notifications unavailable"));
+
+    await expect(getNotifications()).rejects.toThrow("notifications unavailable");
+    expect(apiRequestMock).toHaveBeenCalledWith("/notifications");
+  });
+});

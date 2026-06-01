@@ -44,6 +44,10 @@
   --home-radius-sm: 12px;
   --home-pill-radius: 6px;
   --home-hover-shadow: 0 4px 18px rgba(0,0,0,0.08);
+  --home-focus-ring: rgba(134,168,199,0.6);
+  --home-focus-outline-width: 3px;
+  --home-focus-outline-offset: 4px;
+  --home-news-rail-max-height: 28rem;
 }
 [data-bs-theme="dark"] {
   --home-primary: #86a8c7;
@@ -701,6 +705,15 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  max-height: var(--home-news-rail-max-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.news-list:focus-visible {
+  outline: var(--home-focus-outline-width) solid var(--home-focus-ring);
+  outline-offset: var(--home-focus-outline-offset);
+  border-radius: var(--home-radius);
 }
 .news-card {
   background: var(--home-surface-0);
