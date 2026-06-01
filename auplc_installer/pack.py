@@ -443,7 +443,7 @@ def pack_bundle(
 
     log("===========================================")
     log("AUP Learning Cloud - Pack Offline Bundle")
-    log("  Image source: " + ("local build" if local_build else "pull from GHCR"))
+    log("  Image source: " + ("build" if local_build else "pull"))
     log("===========================================")
 
     require_command("docker", install_hint="Docker is required for pack.")

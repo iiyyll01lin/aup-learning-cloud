@@ -71,6 +71,7 @@ _handler_config: dict[str, Any] = {
     "minimum_quota_to_start": 10,
     "default_quota": 0,
     "team_resource_mapping": {},
+    "auth_mode": "auto-login",
 }
 
 
@@ -118,6 +119,7 @@ def configure_handlers(
     default_quota: int = 0,
     team_resource_mapping: dict[str, list[str]] | None = None,
     github_org: str = "",
+    auth_mode: str = "auto-login",
 ) -> None:
     """Configure handler module with runtime settings."""
     if accelerator_options is not None:
@@ -130,6 +132,7 @@ def configure_handlers(
     if team_resource_mapping is not None:
         _handler_config["team_resource_mapping"] = team_resource_mapping
     _handler_config["github_org"] = github_org
+    _handler_config["auth_mode"] = auth_mode
 
 
 # =============================================================================
@@ -905,22 +908,25 @@ class UserQuotaInfoHandler(APIHandler):
 
 
 class ResourcesAPIHandler(APIHandler):
-    """API endpoint for available resources with metadata."""
+    """API endpoint for current user's available resources with metadata."""
 
     @web.authenticated
     async def get(self):
-        """Get all available resources with metadata.
-
-        Note: Access control is handled by the spawner via window.AVAILABLE_RESOURCES
-        injected into the template. This API returns all configured resources.
-        """
+        """Get resources visible to the current user with metadata."""
         from core.config import HubConfig
+        from core.groups import resolve_resources_for_user
 
+        assert self.current_user is not None
         config = HubConfig.get()
 
-        # Return all configured resources - access control is done client-side
-        # based on spawner-injected window.AVAILABLE_RESOURCES
-        available_resources = set(config.resources.images.keys())
+        available_resources = set(
+            resolve_resources_for_user(
+                self.current_user,
+                _handler_config.get("team_resource_mapping", {}),
+                _handler_config.get("auth_mode", "auto-login"),
+                list(config.resources.images.keys()),
+            )
+        )
 
         # Build response
         resources_list = []

@@ -39,6 +39,7 @@ from auplc_installer.colors import (
     yellow,
 )
 from auplc_installer.state import InstallerState
+from auplc_installer.summary import format_configuration_summary_colored
 from auplc_installer.util import (
     InstallerError,
     log,
@@ -612,41 +613,6 @@ def _flow_select_courses(state: InstallerState) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _summary(state: InstallerState, *, image_source_label: str = "") -> str:
-    runtime = "Docker" if state.use_docker else "containerd"
-
-    def row(key: str, value: str, *, accent: bool = False, faint: bool = False) -> str:
-        if faint:
-            v = dim(value)
-        elif accent:
-            v = bold(value)
-        else:
-            v = green(value)
-        return f"  {bright_cyan(key.ljust(17))}: {v}"
-
-    lines = [bold_cyan("Configuration summary")]
-    lines.append(row("GPU", state.gpu_type or "auto-detect"))
-    lines.append(row("K3s runtime", runtime))
-    if image_source_label:
-        lines.append(row("Image source", image_source_label, accent=True))
-    lines.append(row("Image registry", state.image_registry))
-    lines.append(row("Image tag", state.image_tag))
-    if state.mirror_prefix:
-        lines.append(row("Registry mirror", state.mirror_prefix))
-    else:
-        lines.append(row("Registry mirror", "(none)", faint=True))
-    if state.mirror_pip:
-        lines.append(row("PyPI mirror", state.mirror_pip))
-    else:
-        lines.append(row("PyPI mirror", "(default)", faint=True))
-    if state.mirror_npm:
-        lines.append(row("npm mirror", state.mirror_npm))
-    else:
-        lines.append(row("npm mirror", "(default)", faint=True))
-    lines.append(row("Courses", state.courses.description(), accent=True))
-    return "\n".join(lines)
-
-
 def _flow_install(state: InstallerState) -> None:
     """Run the full install wizard. Raises ``_CancelledError`` on user-aborts."""
     _flow_select_gpu(state)
@@ -660,21 +626,19 @@ def _flow_install(state: InstallerState) -> None:
         image_source = _ask_select(
             "Image source",
             (
-                Choice("pull", "GHCR pull   - fetch pre-built images (fastest; no build deps)"),
-                Choice("build", "Local build - build from dockerfiles/ via Makefile"),
+                Choice("pull", "pull  - fetch pre-built images from registry (default)"),
+                Choice("build", "build - build from dockerfiles/ via Makefile"),
             ),
             default_value="pull",
         )
-        image_source_label = (
-            "GHCR pull (pre-built images)" if image_source == "pull" else "Local build (dockerfiles/Makefile)"
-        )
+        image_source_label = image_source
         pull = image_source == "pull"
         _flow_collect_image_coords(state)
         _flow_collect_mirrors(state)
 
     _flow_select_courses(state)
 
-    log("\n" + _summary(state, image_source_label=image_source_label) + "\n")
+    log("\n" + format_configuration_summary_colored(state, image_source_label=image_source_label) + "\n")
     if not _ask_confirm("Proceed with installation?", default=True):
         raise _CancelledError
 
@@ -694,8 +658,8 @@ def _flow_pack(state: InstallerState, source_root) -> None:
     pack_mode = _ask_select(
         "Pack image source",
         (
-            Choice("pull", "Pull from GHCR (fast, requires pull access)"),
-            Choice("local", "Build locally (needs build deps; slower)"),
+            Choice("pull", "pull  - pull pre-built images from registry (default)"),
+            Choice("build", "build - build locally then pack (needs build deps)"),
         ),
         default_value="pull",
     )
@@ -703,15 +667,14 @@ def _flow_pack(state: InstallerState, source_root) -> None:
     _flow_collect_mirrors(state)
     _flow_select_courses(state)
 
-    label = "GHCR pull" if pack_mode == "pull" else "Local build"
-    log("\n" + _summary(state, image_source_label=label))
+    log("\n" + format_configuration_summary_colored(state, image_source_label=pack_mode))
     log("\nThis will create an offline bundle archive in the current directory.")
     if not _ask_confirm("Proceed?", default=True):
         raise _CancelledError
 
     from auplc_installer.cli import cmd_pack
 
-    cmd_pack(state, local_build=(pack_mode == "local"), source_root=source_root)
+    cmd_pack(state, local_build=(pack_mode == "build"), source_root=source_root)
 
 
 def _flow_uninstall(state: InstallerState) -> None:

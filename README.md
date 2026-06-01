@@ -33,14 +33,15 @@ AUP Learning Cloud is a tailored JupyterHub deployment designed to provide an in
 The simplest way to deploy AUP Learning Cloud on a single machine in a development or demo environment.
 
 ### Prerequisites
-- **Hardware**: AMD Ryzen™ AI Halo Device (e.g., AI Max+ 395, AI Max 390)
+- **Hardware**: Supported **Ryzen AI 300 series and above** APUs and **Radeon 9000 series** PCIe GPUs.
 - **Memory**: 32GB+ RAM (64GB recommended)
 - **Storage**: 500GB+ SSD
 - **OS**: Ubuntu 24.04.4 LTS
 - **Docker**: Install Docker and configure for non-root access
+- **TUI deps**: `python3-questionary` and `python3-prompt-toolkit` (apt) for the recommended interactive installer; conda/venv users use `pip install questionary prompt_toolkit`
 
 ```bash
-# Install the OEM kernel for AMD Ryzen-series APU ROCm support (reboot required)
+# Ryzen AI APU only: OEM kernel for ROCm on Ubuntu 24.04 (reboot required)
 sudo apt update && sudo apt install linux-image-6.14.0-1018-oem
 
 # Install Docker
@@ -54,32 +55,68 @@ newgrp docker
 
 # Install Build Tools
 sudo apt install build-essential
+
+# TUI dependencies (required for the recommended interactive install)
+sudo apt install python3-questionary python3-prompt-toolkit
 ```
 
-> **Kernel note**: The OEM kernel package follows AMD ROCm's Ryzen APU installation guidance for Ubuntu 24.04. See the [ROCm 7.13.0 preview installation guide for Ryzen APUs](https://rocm.docs.amd.com/en/7.13.0-preview/install/rocm.html?fam=ryzen&w=compute&os=ubuntu&ubuntu-ver=24.04&i=pkgman&gpu=max-pro-395&gfx=gfx1151) for details.
+> **Kernel note** (Ryzen AI APU only): The OEM kernel package follows AMD ROCm's Ryzen APU installation guidance for Ubuntu 24.04. See the [ROCm 7.13.0 preview installation guide for Ryzen APUs](https://rocm.docs.amd.com/en/7.13.0-preview/install/rocm.html?fam=ryzen&w=compute&os=ubuntu&ubuntu-ver=24.04&i=pkgman&gpu=max-pro-395&gfx=gfx1151) for details. Radeon dGPU systems typically use the stock Ubuntu kernel—check ROCm docs for your GPU.
 >
 > **Docker note**: See [Docker Post-installation Steps](https://docs.docker.com/engine/install/linux-postinstall/) and [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for details.
+>
+> **TUI note**: **System Python (apt):** install `python3-questionary` and `python3-prompt-toolkit` as shown above. **Conda or virtualenv users:** use `pip install questionary prompt_toolkit` inside your active environment instead of the apt packages. These are required for the interactive TUI; non-interactive `./auplc-installer install` does not need them.
 
 ### Installation
+
+**Interactive (recommended):**
+
 ```bash
 git clone https://github.com/AMDResearch/aup-learning-cloud.git
 cd aup-learning-cloud
-sudo ./auplc-installer install
+./auplc-installer                      # pick Install, accept defaults, set Image tag to develop
 ```
-After installation completes, open http://localhost:30890 in your browser. No login credentials are required - you will be automatically logged in.
 
-Common options:
+**Non-interactive:**
+
 ```bash
-sudo ./auplc-installer install --gpu=strix-halo   # specify GPU type
-sudo ./auplc-installer install --docker=0          # use containerd instead of Docker
-sudo ./auplc-installer install --mirror=mirror.example.com  # use registry mirror
+git clone https://github.com/AMDResearch/aup-learning-cloud.git
+cd aup-learning-cloud
+./auplc-installer install
 ```
 
-See more at [link](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html#runtime-and-mirror-configuration)
+A successful install looks like this:
+
+```text
+This operation needs root privileges. Requesting sudo password...
+  ✓ [1/8] Detecting GPU  (0.2s)
+  ✓ [2/8] Generating values overlay (initial)  (0.0s)
+  ✓ [3/8] Installing helm + k9s  (0.0s)
+  ✓ [4/8] Installing K3s (single-node)  (3.8s)
+  ✓ [5/8] Pulling custom + external images  (25.0s)
+  ✓ [6/8] Deploying ROCm GPU device plugin + node labeller  (0.2s)
+  ✓ [7/8] Refreshing values overlay from node labels  (0.2s)
+  ✓ [8/8] Deploying JupyterHub runtime (helm install + wait)  (9.2s)
+
+   _    _   _ ____    _                          _                  ____ _                 _
+  / \  | | | |  _ \  | |    ___  __ _ _ __ _ __ (_)_ __   __ _     / ___| | ___  _   _  __| |
+ / _ \ | | | | |_) | | |   / _ \/ _` | '__| '_ \| | '_ \ / _` |   | |   | |/ _ \| | | |/ _` |
+/ ___ \| |_| |  __/  | |__|  __/ (_| | |  | | | | | | | | (_| |   | |___| | (_) | |_| | (_| |
+/_/   \_\___/|_|     |_____\___|\__,_|_|  |_| |_|_|_| |_|\__, |    \____|_|\___/ \__,_|\__,_|
+                                                         |___/
+    You have successfully installed AUP Learning Cloud!
+
+    Open in your browser: http://localhost:30890
+    (auto-logged-in as 'student' — no login needed)
+
+    kubectl is configured at $HOME/.kube/config; try `kubectl get nodes`
+```
+
+See the full guide at [Quick Start](https://amdresearch.github.io/aup-learning-cloud/installation/quick-start.html) and [Single-Node Deployment](https://amdresearch.github.io/aup-learning-cloud/installation/single-node.html).
 
 ### Uninstall
+
 ```bash
-sudo ./auplc-installer uninstall
+./auplc-installer uninstall
 ```
 
 ## Cluster Installation
@@ -145,12 +182,10 @@ Current environments are configured via `custom.resources.images` in `runtime/va
 
 The `auplc-default`, `auplc-base`, and `Course-*` images remain notebook and course focused. Browser-based coding is provided by generic code-server images instead of per-course VS Code image variants. Resources launch code-server when their `custom.resources.metadata.<resource>.launchMode` is set to `code-server`; the default configuration uses `code-cpu` for CPU-only coding workspaces and `code-gpu` for GPU-accelerated coding workspaces.
 
-Build the generic coding images from the repository root with:
+Build the images:
 
 ```bash
-make -C dockerfiles code-cpu
-make -C dockerfiles code-gpu GPU_TARGET=gfx1151
-make -C dockerfiles code
+./auplc-installer img build base-rocm --gpu=strix
 ```
 
 The code-server container starts on port `8888` with `code-server --auth none`. This is safe only when the user pod is reachable exclusively through JupyterHub and the JupyterHub proxy authentication boundary. Do not expose the code-server pod port directly through a NodePort, LoadBalancer, ingress, or other unauthenticated route.

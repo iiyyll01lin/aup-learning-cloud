@@ -165,7 +165,7 @@ class RemoteLabKubeSpawner(KubeSpawner):
     async def get_user_resources(self) -> list[str]:
         """Get available resources for the user based on their JupyterHub group memberships.
 
-        For auto-login/dummy modes, returns the "official" resource set.
+        For auto-login/dummy modes, returns all configured resources.
         For all other users, resolves resources from JupyterHub groups
         (which are synced from GitHub teams or assigned to native users
         via the auth_state_hook). Falls back to legacy pattern matching
@@ -177,30 +177,16 @@ class RemoteLabKubeSpawner(KubeSpawner):
         username = self.user.name.strip()
         self.log.debug(f"Resolving resources for user: {username}")
 
-        # Auto-login or dummy mode: grant all resources
-        if self.auth_mode in ["auto-login", "dummy"]:
-            self.log.debug(f"Auth mode '{self.auth_mode}': granting all resources")
-            return self.team_resource_mapping.get("official", [])
+        from core.groups import resolve_resources_for_user
 
-        # Resolve resources from JupyterHub groups
-        from core.groups import get_resources_for_user
-
-        available_resources = get_resources_for_user(self.user, self.team_resource_mapping)
-
-        if available_resources:
-            self.log.debug(f"User '{username}' resources from groups: {available_resources}")
-            return available_resources
-
-        # Defensive fallback: auth_state_hook should have already assigned
-        # native users to the "native-users" group, but if that failed for
-        # any reason, fall back to the mapping entry directly.
-        if not username.startswith("github:"):
-            self.log.debug(f"Native user '{username}' has no groups, using default fallback")
-            return self.team_resource_mapping.get("native-users", self.team_resource_mapping.get("official", []))
-
-        # GitHub user with no matching groups
-        self.log.debug(f"No resources found for user '{username}', set to none")
-        return ["none"]
+        available_resources = resolve_resources_for_user(
+            self.user,
+            self.team_resource_mapping,
+            self.auth_mode,
+            list(self.resource_images.keys()),
+        )
+        self.log.debug(f"User '{username}' resolved resources: {available_resources}")
+        return available_resources
 
     async def options_form(self, _) -> str:
         """Generate the HTML form for resource selection.

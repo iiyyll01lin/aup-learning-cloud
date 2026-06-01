@@ -172,7 +172,7 @@ def pull_custom_images(
 
     tag = f"{image_tag}-{cfg.gpu_target}"
     log_section(
-        "Pulling pre-built custom images from GHCR...\n"
+        "Pulling pre-built custom images from registry...\n"
         f"  GPU_TARGET={cfg.gpu_target}, tag={tag}\n"
         f"  Courses: {courses.description()}"
     )
