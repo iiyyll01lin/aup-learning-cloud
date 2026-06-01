@@ -93,43 +93,37 @@ SOFTWARE.
           border-top: 1px solid rgba(128, 128, 128, 0.15);
         }
         #notification-banner-mount {
-          width: min(100% - 2rem, 1320px);
-          margin: -0.75rem auto 1rem;
+          width: 100%;
+          margin: 0 0 1rem;
         }
         #notification-banner-mount:empty {
           display: none;
           margin: 0;
         }
         .notification-banner {
-          --notification-radius: var(--home-radius-sm, var(--bs-border-radius-lg));
-          --notification-border: var(--home-border, var(--bs-border-color-translucent));
-          border: 1px solid var(--notification-border);
-          border-left-width: 0.35rem;
-          border-radius: var(--notification-radius);
-          background: var(--bs-warning-bg-subtle, var(--bs-warning));
-          color: var(--bs-warning-text-emphasis, var(--bs-body-color));
-          box-shadow: var(--home-hover-shadow, var(--bs-box-shadow-sm));
-          padding: 0.6rem 0.75rem;
+          --notification-rule: var(--bs-border-color-translucent);
+          --notification-accent: var(--bs-warning-text-emphasis, var(--bs-body-color));
+          border-top: 1px solid var(--notification-rule);
+          border-bottom: 1px solid var(--notification-rule);
+          background: transparent;
+          color: var(--notification-accent);
+          padding: 0.45rem var(--bs-gutter-x, 0.75rem);
         }
         .notification-banner[data-severity="info"] {
-          background: var(--bs-info-bg-subtle, var(--bs-info));
-          border-color: var(--bs-info-border-subtle, var(--bs-info));
-          color: var(--bs-info-text-emphasis, var(--bs-body-color));
+          --notification-rule: var(--bs-info-border-subtle, var(--bs-border-color-translucent));
+          --notification-accent: var(--bs-info-text-emphasis, var(--bs-body-color));
         }
         .notification-banner[data-severity="success"] {
-          background: var(--bs-success-bg-subtle, var(--bs-success));
-          border-color: var(--bs-success-border-subtle, var(--bs-success));
-          color: var(--bs-success-text-emphasis, var(--bs-body-color));
+          --notification-rule: var(--bs-success-border-subtle, var(--bs-border-color-translucent));
+          --notification-accent: var(--bs-success-text-emphasis, var(--bs-body-color));
         }
         .notification-banner[data-severity="warning"] {
-          background: var(--bs-warning-bg-subtle, var(--bs-warning));
-          border-color: var(--bs-warning-border-subtle, var(--bs-warning));
-          color: var(--bs-warning-text-emphasis, var(--bs-body-color));
+          --notification-rule: var(--bs-warning-border-subtle, var(--bs-border-color-translucent));
+          --notification-accent: var(--bs-warning-text-emphasis, var(--bs-body-color));
         }
         .notification-banner[data-severity="danger"] {
-          background: var(--bs-danger-bg-subtle, var(--bs-danger));
-          border-color: var(--bs-danger-border-subtle, var(--bs-danger));
-          color: var(--bs-danger-text-emphasis, var(--bs-body-color));
+          --notification-rule: var(--bs-danger-border-subtle, var(--bs-border-color-translucent));
+          --notification-accent: var(--bs-danger-text-emphasis, var(--bs-body-color));
         }
         .notification-banner-summary {
           display: flex;
@@ -139,14 +133,12 @@ SOFTWARE.
         }
         .notification-banner-severity {
           flex: 0 0 auto;
-          border: 1px solid currentColor;
-          border-radius: 999px;
-          padding: 0.15rem 0.55rem;
-          font-size: 0.72rem;
+          padding: 0;
+          font-size: 0.68rem;
           font-weight: 700;
           line-height: 1.2;
           text-transform: uppercase;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.08em;
         }
         .notification-banner-preview {
           flex: 1 1 auto;
@@ -162,9 +154,9 @@ SOFTWARE.
         }
         .notification-banner-body {
           display: none;
-          margin-top: 0.65rem;
-          padding-top: 0.65rem;
-          border-top: 1px solid currentColor;
+          margin-top: 0.45rem;
+          padding-top: 0.45rem;
+          border-top: 1px solid var(--notification-rule);
         }
         .notification-banner.is-expanded .notification-banner-body {
           display: block;
@@ -189,7 +181,7 @@ SOFTWARE.
         }
         @media (max-width: 575.98px) {
           .notification-banner {
-            padding: 0.55rem 0.65rem;
+            padding: 0.45rem var(--bs-gutter-x, 0.75rem);
           }
           .notification-banner-summary {
             align-items: flex-start;
