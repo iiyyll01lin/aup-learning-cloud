@@ -346,7 +346,7 @@ function App() {
           <a href={homeUrl}>Home</a>
           <span>/</span>
           <span>Launch Server</span>
-          <button className="spawn-theme-toggle" onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+          <button type="button" className="spawn-theme-toggle" onClick={toggleTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
         </div>

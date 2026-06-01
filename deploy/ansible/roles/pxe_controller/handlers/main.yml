@@ -1,4 +1,3 @@
-#!/bin/bash
 # Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,27 +17,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# ====================================================================
-# IMPORTANT: Modify node names below to match your cluster
-# Run 'kubectl get nodes' to see your actual node names
-# ====================================================================
+---
+- name: Restart dnsmasq
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: restarted
+    daemon_reload: true
 
-# Label nodes
-kubectl label nodes phx-1 node-type=phx
-kubectl label nodes phx-64g node-type=phx
-kubectl label nodes rdna4-1 node-type=dgpu
-kubectl label nodes strix-1 node-type=strix
-kubectl label nodes strix-2 node-type=strix
-kubectl label nodes strix-3 node-type=strix
-kubectl label nodes strix-4 node-type=strix
-kubectl label nodes strix-5 node-type=strix
-kubectl label nodes strix-6 node-type=strix
-kubectl label nodes strix-7 node-type=strix
-kubectl label nodes strix-halo-1 node-type=strix-halo
-kubectl label nodes strix-halo-2 node-type=strix-halo
-kubectl label nodes strix-halo-3 node-type=strix-halo
-kubectl label nodes strix-halo-4 node-type=strix-halo
+- name: Restart nfs-kernel-server
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    state: restarted
 
-# Verify labels
-kubectl get nodes --show-labels
+- name: Restart apache2
+  ansible.builtin.systemd:
+    name: apache2
+    state: restarted
 
+- name: Reload NFS exports
+  ansible.builtin.command: exportfs -a
+  changed_when: true

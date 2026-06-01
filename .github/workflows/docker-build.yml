@@ -51,6 +51,9 @@ on:
         options:
           - all
           - hub
+          - code
+          - code-cpu
+          - code-gpu
           - courses
           - base-cpu
           - base-gpu
@@ -64,6 +67,7 @@ on:
           - gfx110x
           - gfx1150
           - gfx1151
+          - gfx1152
           - gfx120x
 
 # Build matrix is defined in .github/build-config.json
@@ -86,6 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       hub: ${{ steps.filter.outputs.hub }}
+      code: ${{ steps.filter.outputs.code }}
       courses: ${{ steps.filter.outputs.courses }}
       base-cpu: ${{ steps.filter.outputs.base-cpu }}
       base-gpu: ${{ steps.filter.outputs.base-gpu }}
@@ -97,6 +102,8 @@ jobs:
       course-list: ${{ steps.config.outputs.courses }}
       image-name-suffix: ${{ steps.names.outputs.suffix }}
       hub-image: ${{ steps.names.outputs.hub }}
+      code-cpu-image: ${{ steps.names.outputs.code-cpu }}
+      code-gpu-image: ${{ steps.names.outputs.code-gpu }}
       base-cpu-image: ${{ steps.names.outputs.base-cpu }}
       base-gpu-image: ${{ steps.names.outputs.base-gpu }}
     steps:
@@ -119,6 +126,8 @@ jobs:
         run: |
           echo "suffix=${SUFFIX}"        >> "$GITHUB_OUTPUT"
           echo "hub=${REGISTRY}/auplc-hub${SUFFIX}"         >> "$GITHUB_OUTPUT"
+          echo "code-cpu=${REGISTRY}/auplc-code-cpu${SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "code-gpu=${REGISTRY}/auplc-code-gpu${SUFFIX}" >> "$GITHUB_OUTPUT"
           echo "base-cpu=${REGISTRY}/auplc-default${SUFFIX}" >> "$GITHUB_OUTPUT"
           echo "base-gpu=${REGISTRY}/auplc-base${SUFFIX}"    >> "$GITHUB_OUTPUT"
 
@@ -158,6 +167,8 @@ jobs:
             hub:
               - 'dockerfiles/Hub/**'
               - 'runtime/hub/**'
+            code:
+              - 'dockerfiles/Code/**'
             courses:
               - 'dockerfiles/Courses/**'
               - 'dockerfiles/Base/**'
@@ -166,6 +177,7 @@ jobs:
               - 'dockerfiles/Base/Dockerfile.cpu'
             base-gpu:
               - 'dockerfiles/Base/Dockerfile.rocm'
+              - '.github/build-config.json'
 
   # ──────────────────────────────────────────────
   # Hub Image (CPU only, runs on GitHub Actions)
@@ -221,6 +233,88 @@ jobs:
           provenance: false
 
   # ──────────────────────────────────────────────
+  # Code CPU Image (code-server environment)
+  # ──────────────────────────────────────────────
+  build-code-cpu:
+    name: Build Code CPU Image
+    needs: [changes, build-base-cpu]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      (needs.build-base-cpu.result == 'success' || needs.build-base-cpu.result == 'skipped') &&
+      (
+        needs.changes.outputs.is-tag == 'true' ||
+        (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.code == 'true' || needs.changes.outputs.base-cpu == 'true')) ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          (
+            github.event.inputs.images == 'all' ||
+            github.event.inputs.images == 'code' ||
+            github.event.inputs.images == 'code-cpu' ||
+            github.event.inputs.images == 'base-cpu'
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dockerfiles/Code/auplc-hub-link/package-lock.json
+
+      - name: Package Hub link extension
+        run: |
+          npm --prefix dockerfiles/Code/auplc-hub-link ci
+          rm -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          npm --prefix dockerfiles/Code/auplc-hub-link run package
+          test -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.changes.outputs.code-cpu-image }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Build and push Code CPU image
+        uses: docker/build-push-action@v6
+        with:
+          context: dockerfiles/Code
+          file: dockerfiles/Code/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ needs.changes.outputs.base-cpu-image }}:latest
+            IMAGE_FLAVOR=cpu
+          cache-from: type=gha,scope=code-cpu
+          cache-to: type=gha,mode=max,scope=code-cpu
+          provenance: false
+
+  # ──────────────────────────────────────────────
   # Base CPU Image (runs on GitHub Actions)
   # ──────────────────────────────────────────────
   build-base-cpu:
@@ -272,11 +366,133 @@ jobs:
           provenance: false
 
   # ──────────────────────────────────────────────
+  # Code GPU Image (code-server environment)
+  # ──────────────────────────────────────────────
+  build-code-gpu:
+    name: "Build Code GPU Image (${{ matrix.gpu_target }})"
+    needs: [changes, build-base-gpu]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      (needs.build-base-gpu.result == 'success' || needs.build-base-gpu.result == 'skipped') &&
+      (
+        needs.changes.outputs.is-tag == 'true' ||
+        (github.event_name != 'workflow_dispatch' && (needs.changes.outputs.code == 'true' || needs.changes.outputs.base-gpu == 'true')) ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          (
+            github.event.inputs.images == 'all' ||
+            github.event.inputs.images == 'code' ||
+            github.event.inputs.images == 'code-gpu' ||
+            github.event.inputs.images == 'base-gpu'
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gpu_target: ${{ fromJSON(needs.changes.outputs.gpu-targets) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dockerfiles/Code/auplc-hub-link/package-lock.json
+
+      - name: Package Hub link extension
+        run: |
+          npm --prefix dockerfiles/Code/auplc-hub-link ci
+          rm -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          npm --prefix dockerfiles/Code/auplc-hub-link run package
+          test -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (target-suffixed tags)
+        id: meta-suffixed
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.changes.outputs.code-gpu-image }}
+          flavor: |
+            suffix=-${{ matrix.gpu_target }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+
+      - name: Docker metadata (unsuffixed tags — default target only)
+        if: matrix.gpu_target == needs.changes.outputs.default-gpu-target
+        id: meta-default
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.changes.outputs.code-gpu-image }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event.inputs.version != '' }}
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+
+      - name: Merge tags
+        id: tags
+        run: |
+          TAGS="${{ steps.meta-suffixed.outputs.tags }}"
+          if [ -n "${{ steps.meta-default.outputs.tags }}" ]; then
+            TAGS="${TAGS}
+          ${{ steps.meta-default.outputs.tags }}"
+          fi
+          TAGS=$(echo "$TAGS" | sort -u)
+          {
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Code GPU image
+        uses: docker/build-push-action@v6
+        with:
+          context: dockerfiles/Code
+          file: dockerfiles/Code/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.meta-suffixed.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ needs.changes.outputs.base-gpu-image }}:latest-${{ matrix.gpu_target }}
+            IMAGE_FLAVOR=gpu
+          cache-from: type=gha,scope=code-gpu-${{ matrix.gpu_target }}
+          cache-to: type=gha,mode=max,scope=code-gpu-${{ matrix.gpu_target }}
+          provenance: false
+
+  # ──────────────────────────────────────────────
   # Base GPU Image (multi-target via GPU_TARGET)
   #
-  # No GPU hardware required — only downloads ROCm tarball + pip wheels.
+  # No GPU hardware required — only installs ROCm apt packages + pip wheels.
   # Uses free-disk-space action to reclaim runner disk for the large image.
-  # Builds 5 GPU targets in parallel via matrix strategy.
+  # Builds GPU targets in parallel via matrix strategy.
   # ──────────────────────────────────────────────
   build-base-gpu:
     name: "Build Base GPU Image (${{ matrix.gpu_target }})"
@@ -322,9 +538,11 @@ jobs:
         id: suffix
         run: |
           echo "tag_suffix=${{ matrix.gpu_target }}" >> "$GITHUB_OUTPUT"
-          # Look up pytorch_whl from gpu-map; fall back to gpu_target if not found
+          # Look up target-specific build metadata; fall back to gpu_target if not found
           WHL=$(echo '${{ needs.changes.outputs.gpu-map }}' | jq -r --arg t "${{ matrix.gpu_target }}" '.[] | select(.name == $t) | .pytorch_whl // .name')
+          SDK=$(echo '${{ needs.changes.outputs.gpu-map }}' | jq -r --arg t "${{ matrix.gpu_target }}" '.[] | select(.name == $t) | .rocm_sdk // .name')
           echo "pytorch_whl=${WHL}" >> "$GITHUB_OUTPUT"
+          echo "rocm_sdk=${SDK}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -387,6 +605,7 @@ jobs:
           labels: ${{ steps.meta-suffixed.outputs.labels }}
           build-args: |
             GPU_TARGET=${{ matrix.gpu_target }}
+            ROCM_SDK_TARGET=${{ steps.suffix.outputs.rocm_sdk }}
             PYTORCH_WHL_TARGET=${{ steps.suffix.outputs.pytorch_whl }}
           cache-from: type=gha,scope=base-gpu-${{ matrix.gpu_target }}
           cache-to: type=gha,mode=max,scope=base-gpu-${{ matrix.gpu_target }}
@@ -407,7 +626,7 @@ jobs:
   # BASE_IMAGE build-arg overrides the default so course images
   # can track the latest GPU base image version from CI.
   #
-  # Each course is built for all 5 GPU targets (course × gpu_target matrix).
+  # Each course is built for every configured GPU target (course × gpu_target matrix).
   # ──────────────────────────────────────────────
   build-courses:
     name: "Build Course: ${{ matrix.course }} (${{ matrix.gpu_target }})"

@@ -227,6 +227,15 @@
 }
 [data-bs-theme="dark"] .resource-tag { background: var(--home-surface-2) !important; color: var(--home-text-secondary) !important; border: none !important; }
 
+.resource-type-badge {
+  display: inline-flex; align-items: center;
+  padding: 1px 6px; border-radius: 5px;
+  border: 1px solid var(--home-border); background: var(--home-surface-1); color: var(--home-text-secondary);
+  font-size: 0.6rem; font-weight: 700; white-space: nowrap;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+[data-bs-theme="dark"] .resource-type-badge { background: var(--home-surface-2); border-color: var(--home-border); color: var(--home-text-secondary); }
+
 .git-clone-badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 1px 6px; border-radius: 5px;

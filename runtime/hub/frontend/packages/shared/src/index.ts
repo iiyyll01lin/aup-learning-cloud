@@ -21,3 +21,4 @@ export * from "./types/index.js";
 export * from "./api/index.js";
 export * from "./utils/index.js";
 export * from "./branding.js";
+export * from "./resourceTypes.js";

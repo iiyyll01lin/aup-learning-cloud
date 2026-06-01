@@ -4,6 +4,7 @@
 import { apiRequest, adminApiRequest } from "./client.js";
 import type {
   DashboardOverview,
+  HourlyUsage,
   StatsDistributionResponse,
   StatsUsageResponse,
   UserDetail,
@@ -21,9 +22,17 @@ export async function getDistribution(days = 30): Promise<StatsDistributionRespo
   return adminApiRequest<StatsDistributionResponse>(`/stats/distribution?days=${days}`);
 }
 
-export async function getHourlyDistribution(days = 30): Promise<{ hourly: import('../types/stats.js').HourlyUsage[] }> {
+export async function getHourlyDistribution(days = 30, startDate?: string, endDate?: string): Promise<{ hourly: HourlyUsage[] }> {
   const tzOffset = -new Date().getTimezoneOffset(); // minutes ahead of UTC
-  return adminApiRequest(`/stats/hourly?days=${days}&tz_offset=${tzOffset}`);
+  const params = new URLSearchParams({
+    days: String(days),
+    tz_offset: String(tzOffset),
+  });
+  if (startDate && endDate) {
+    params.set("start_date", startDate);
+    params.set("end_date", endDate);
+  }
+  return adminApiRequest(`/stats/hourly?${params.toString()}`);
 }
 
 export async function getUserDetail(username: string, days = 30, granularity: "day" | "week" = "day"): Promise<UserDetail> {

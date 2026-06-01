@@ -1,6 +1,35 @@
+// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 import { useState, useEffect, useCallback } from "react";
 import type { Resource, ResourceGroup, UserQuotaInfo, UserDetail } from "@auplc/shared";
-import { getResources, getMyQuota, getMyUsage, PLATFORM_NAME } from "@auplc/shared";
+import {
+  getMyQuota,
+  getMyUsage,
+  getResources,
+  getResourceType,
+  getResourceTypeLabel,
+  PLATFORM_NAME,
+} from "@auplc/shared";
+import onboardingLaunchWorkspaceUrl from "./onboarding-launch-workspace.png";
+import onboardingResourcePickerUrl from "./onboarding-resource-picker.png";
+import onboardingDeveloperProgramQrUrl from "./onboarding-developer-program-qr.png";
 
 type Theme = "light" | "dark";
 function getInitialTheme(): Theme {
@@ -21,6 +50,15 @@ interface HomeData {
   server_active: boolean;
   server_url: string;
 }
+
+interface OnboardingState {
+  should_show: boolean;
+  dismissed_at: string | null;
+}
+
+type OnboardingStep = 0 | 1 | 2;
+
+const DEVELOPER_PROGRAM_URL = "https://www.amd.com/en/developer/ai-dev-program.html?utm_source=Generic&utm_campaign=AUP&utm_id=AUP";
 
 declare global {
   interface Window {
@@ -89,6 +127,13 @@ function App() {
   const [stopError, setStopError] = useState<string | null>(null);
   const [quota, setQuota] = useState<UserQuotaInfo | null>(null);
 
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [dismissingOnboarding, setDismissingOnboarding] = useState(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>(0);
+
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const toggleTheme = useCallback(() => {
     setTheme(t => {
@@ -102,11 +147,103 @@ function App() {
     getMyQuota().then(setQuota).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch(`${baseUrl}api/onboarding/me`, {
+      headers: {
+        Accept: "application/json",
+        "X-XSRFToken": jhdata.xsrf_token ?? "",
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to fetch onboarding state (HTTP ${res.status})`);
+        return res.json();
+      })
+      .then((data: OnboardingState) => {
+        setOnboarding(data);
+        setOnboardingError(null);
+        if (data.should_show) {
+          setOnboardingStep(0);
+          setShowOnboardingModal(true);
+        }
+      })
+      .catch((err) => setOnboardingError(err instanceof Error ? err.message : "Unable to load onboarding status."))
+      .finally(() => setOnboardingLoading(false));
+  }, []);
+
+  const dismissOnboarding = useCallback(async (): Promise<boolean> => {
+    if (dismissingOnboarding) return false;
+    setDismissingOnboarding(true);
+    setOnboardingError(null);
+    try {
+      const res = await fetch(`${baseUrl}api/onboarding/dismiss`, {
+        method: "POST",
+        headers: {
+          "X-XSRFToken": jhdata.xsrf_token ?? "",
+        },
+      });
+      if (res.ok) {
+        try {
+          const data = await res.json();
+          setOnboarding(data);
+        } catch {
+          setOnboarding((prev) => (prev ? { ...prev, should_show: false } : null));
+        }
+        return true;
+      } else {
+        setOnboardingError(`Failed to dismiss onboarding (HTTP ${res.status})`);
+        return false;
+      }
+    } catch (err) {
+      setOnboardingError(err instanceof Error ? err.message : "Network error while dismissing onboarding.");
+      return false;
+    } finally {
+      setDismissingOnboarding(false);
+    }
+  }, [dismissingOnboarding]);
+
+  const openOnboarding = useCallback(() => {
+    setOnboardingStep(0);
+    setShowOnboardingModal(true);
+  }, []);
+
+  const handleCloseOnboarding = useCallback(() => {
+    setShowOnboardingModal(false);
+    setOnboardingStep(0);
+    if (onboarding?.should_show) {
+      void dismissOnboarding();
+    }
+  }, [dismissOnboarding, onboarding?.should_show]);
+
+  const handleOnboardingDone = useCallback(async () => {
+    if (onboarding?.should_show) {
+      await dismissOnboarding();
+    }
+    setShowOnboardingModal(false);
+    setOnboardingStep(0);
+  }, [dismissOnboarding, onboarding?.should_show]);
+
+  const goToPreviousOnboardingStep = useCallback(() => {
+    setOnboardingStep((prev) => {
+      if (prev === 2) return 1;
+      return 0;
+    });
+  }, []);
+
+  const goToNextOnboardingStep = useCallback(() => {
+    setOnboardingStep((prev) => {
+      if (prev === 0) return 1;
+      return 2;
+    });
+  }, []);
+
   // Poll server status every 15s to keep launch bar in sync
   useEffect(() => {
     const poll = () => {
       fetch(`${baseUrl}api/users/${jhdata.user ?? "student"}`, {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "X-XSRFToken": jhdata.xsrf_token ?? "",
+        },
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
@@ -213,6 +350,9 @@ function App() {
             <a href={`${baseUrl}spawn`}>
               <i className="fa fa-rocket"></i> Launch Server
             </a>
+            <button className="hero-nav-btn onboarding-reopen-btn" onClick={openOnboarding} type="button" title="Open quick guide" aria-label="Open AUP quick guide">
+              <i className="fa fa-question-circle"></i> Guide
+            </button>
             <button className="hero-nav-btn" onClick={openUsage} type="button">
               <i className="fa fa-bar-chart"></i> Usage
             </button>
@@ -238,6 +378,14 @@ function App() {
           </p>
         </div>
       </section>
+
+      {!onboardingLoading && onboardingError && !showOnboardingModal && (
+        <div className="container">
+          <div className="onboarding-error-subtle">
+            <i className="fa fa-info-circle"></i> {onboardingError}
+          </div>
+        </div>
+      )}
 
       {/* Launch Bar */}
       <div className="container">
@@ -271,7 +419,7 @@ function App() {
               {quota?.enabled && (
                 <span className="lb-quota-inline">
                   {" · Quota: "}
-                  {quota.unlimited ? "Unlimited" : `${quota.balance}h remaining`}
+                  {quota.unlimited ? "Unlimited" : `${quota.balance} min remaining`}
                 </span>
               )}
             </div>
@@ -422,6 +570,12 @@ function App() {
                         </div>
                         <div className="resource-card-tags">
                           <span
+                            className="resource-type-badge"
+                            data-resource-type={getResourceType(resource)}
+                          >
+                            {getResourceTypeLabel(resource)}
+                          </span>
+                          <span
                             className={`resource-tag tag-${accelType}`}
                           >
                             {accelType.toUpperCase()}
@@ -546,7 +700,7 @@ function App() {
                 )}
                 <div className="news-card">
                   <div className="news-meta">Platform</div>
-                  <h4>Welcome to AUP Learning Cloud</h4>
+                  <h4>Welcome to {PLATFORM_NAME}</h4>
                   <p>
                     Get started with GPU-accelerated Jupyter notebooks powered
                     by AMD ROCm technology.
@@ -575,6 +729,171 @@ function App() {
               <button className="btn-home-sm danger" onClick={doStop}>
                 <i className="fa fa-stop"></i> Stop Server
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOnboardingModal && (
+        <div className="onboarding-overlay" onClick={handleCloseOnboarding}>
+          <div
+            aria-labelledby="onboarding-modal-title"
+            aria-modal="true"
+            className="onboarding-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+          >
+            <div className="onboarding-modal-header">
+              <div>
+                <div className="onboarding-modal-eyebrow">AUP quick guide</div>
+                <div className="onboarding-modal-step-label">Step {onboardingStep + 1} of 3</div>
+              </div>
+              <button className="onboarding-close" onClick={handleCloseOnboarding} type="button" title="Close onboarding">
+                <i className="fa fa-times"></i>
+              </button>
+            </div>
+
+            <div className="onboarding-modal-body">
+              {onboardingStep === 0 && (
+                <div className="onboarding-step-layout">
+                  <div className="onboarding-panel-copy">
+                    <span className="onboarding-kicker">Developer resources</span>
+                    <h2 id="onboarding-modal-title">AMD Developer Program</h2>
+                    <p>
+                      Scan the QR code or open the Developer Program to explore documentation, tools, and updates beyond the platform.
+                    </p>
+                    <div className="onboarding-resource-summary">
+                      Keep this page handy when you want deeper ROCm docs, learning paths, or AMD developer updates.
+                    </div>
+                  </div>
+                  <div className="onboarding-dev-resources">
+                    <div className="onboarding-qr-card" aria-label="Developer Program QR code">
+                      <img src={onboardingDeveloperProgramQrUrl} alt="QR code for AMD Developer Program" />
+                      <span>Scan to open AMD Developer Program</span>
+                    </div>
+                    <div className="onboarding-side-card">
+                      <h3>Open the Developer Program</h3>
+                      <p>Explore AMD documentation, tooling, community resources, and the latest developer updates.</p>
+                      <a className="btn-launch" href={DEVELOPER_PROGRAM_URL} rel="noopener noreferrer" target="_blank">
+                        <i className="fa fa-external-link"></i> AMD AI Developer Program
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {onboardingStep === 1 && (
+                <div className="onboarding-step-layout onboarding-step-layout-welcome">
+                  <div className="onboarding-panel-copy">
+                    <span className="onboarding-kicker">Welcome</span>
+                    <h2 id="onboarding-modal-title">Welcome to {PLATFORM_NAME}</h2>
+                    <p>
+                      This short guide will show you how to get started, where to launch your environment,
+                      and where to find AMD developer resources later.
+                    </p>
+                    <div className="onboarding-feature-list">
+                      <div className="onboarding-feature-card">
+                        <strong>Pick a resource</strong>
+                        <span>Choose the environment that fits your course, project, or experiment.</span>
+                      </div>
+                      <div className="onboarding-feature-card">
+                        <strong>Launch Jupyter</strong>
+                        <span>Start quickly with prepared notebooks, tools, and AMD acceleration already wired in.</span>
+                      </div>
+                      <div className="onboarding-feature-card">
+                        <strong>Keep exploring</strong>
+                        <span>Use the guide button anytime if you want a quick refresher later.</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="onboarding-side-card onboarding-side-card-highlight">
+                    <div className="onboarding-side-card-icon">
+                      <i className="fa fa-graduation-cap"></i>
+                    </div>
+                    <h3>Three quick stops</h3>
+                    <p>In less than a minute, you’ll know where to launch, what to expect, and where to go for developer support.</p>
+                  </div>
+                </div>
+              )}
+
+              {onboardingStep === 2 && (
+                <div className="onboarding-step-layout">
+                  <div className="onboarding-panel-copy">
+                    <span className="onboarding-kicker">How to use</span>
+                    <h2 id="onboarding-modal-title">Choose a resource and start learning</h2>
+                    <p>
+                      Pick a resource profile, launch Jupyter, and start from the notebooks and tools already prepared for you.
+                    </p>
+                    <div className="onboarding-tips-list">
+                      <div className="onboarding-tip-row">
+                        <span className="onboarding-tip-index">1</span>
+                        <span>Review the available resources on the Home page and open the one that fits your workload.</span>
+                      </div>
+                      <div className="onboarding-tip-row">
+                        <span className="onboarding-tip-index">2</span>
+                        <span>Launch your environment, then open notebooks or JupyterLab from the running server.</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="onboarding-shot-grid" aria-label="Guide screenshots">
+                    <figure className="onboarding-shot-card">
+                      <div className="onboarding-shot-window">
+                        <div className="onboarding-shot-chrome" aria-hidden="true">
+                          <span></span><span></span><span></span>
+                        </div>
+                        <img src={onboardingResourcePickerUrl} alt="Available Resources cards on the Home page" />
+                      </div>
+                      <figcaption>
+                        <strong>Choose a resource</strong>
+                        <span>Start from the Home page cards.</span>
+                      </figcaption>
+                    </figure>
+                    <figure className="onboarding-shot-card">
+                      <div className="onboarding-shot-window">
+                        <div className="onboarding-shot-chrome" aria-hidden="true">
+                          <span></span><span></span><span></span>
+                        </div>
+                        <img src={onboardingLaunchWorkspaceUrl} alt="Spawner page for configuring and launching a workspace" />
+                      </div>
+                      <figcaption>
+                        <strong>Configure and launch</strong>
+                        <span>Review options, then start Jupyter.</span>
+                      </figcaption>
+                    </figure>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="onboarding-modal-footer">
+              <div className="onboarding-progress">
+                <span className="onboarding-progress-count">{onboardingStep + 1} / 3</span>
+                <div className="onboarding-progress-dots" aria-hidden="true">
+                  {[0, 1, 2].map((step) => (
+                    <span
+                      className={`onboarding-progress-dot${step === onboardingStep ? " active" : ""}`}
+                      key={step}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="onboarding-footer-actions">
+                {onboardingStep > 0 && (
+                  <button className="btn-home-sm" onClick={goToPreviousOnboardingStep} type="button">
+                    Back
+                  </button>
+                )}
+                {onboardingStep < 2 ? (
+                  <button className="btn-launch" onClick={goToNextOnboardingStep} type="button">
+                    Next
+                  </button>
+                ) : (
+                  <button className="btn-launch" disabled={dismissingOnboarding} onClick={handleOnboardingDone} type="button">
+                    {dismissingOnboarding ? "Saving..." : "Done"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -17,12 +17,15 @@ MIRROR_PIP ?=
 MIRROR_NPM ?=
 
 # GPU target architecture (short AMD apt-repo name; e.g. gfx110x, gfx1150,
-# gfx1151, gfx120x). Dockerfile.rocm maps this to the corresponding pip
+# gfx1151, gfx1152, gfx120x). Dockerfile.rocm maps this to the corresponding pip
 # wheel path (gfx110X-all / gfx120X-all for the RDNA 3 / RDNA 4 buckets).
 GPU_TARGET ?= gfx1151
 
+ROCM_SDK_TARGET ?= $(GPU_TARGET)
+
 # GPU base image used by course Dockerfiles (override to track a specific version)
 GPU_BASE_IMAGE ?= ghcr.io/amdresearch/auplc-base:latest
+CODE_GPU_BASE_IMAGE ?= ghcr.io/amdresearch/auplc-base:latest-$(GPU_TARGET)
 
 # Build args for docker build (constructed from mirror settings)
 BUILD_ARGS :=
@@ -37,7 +40,7 @@ ifneq ($(MIRROR_NPM),)
   BUILD_ARGS += --build-arg NPM_REGISTRY=$(MIRROR_NPM)
 endif
 
-.PHONY: all base base-cpu base-rocm base-gfx1151 hub courses cv dl llm physim
+.PHONY: all base base-cpu base-rocm base-gfx1151 hub code code-cpu code-gpu courses cv dl llm physim
 
 # Build all images
 all: base hub courses
@@ -51,7 +54,7 @@ base-cpu:
 		echo "-------------------------------------------";
 
 	cd Base && docker build $(BUILD_ARGS) \
-		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyter/base-notebook,) \
+		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/quay.io/jupyter/base-notebook:python-3.12,) \
 		-t ghcr.io/amdresearch/auplc-default:latest --file Dockerfile.cpu .
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-default:latest
 
@@ -62,6 +65,7 @@ base-rocm:
 
 	cd Base && docker build $(BUILD_ARGS) \
 		--build-arg GPU_TARGET=$(GPU_TARGET) \
+		--build-arg ROCM_SDK_TARGET=$(ROCM_SDK_TARGET) \
 		$(if $(MIRROR_PREFIX),--build-arg BASE_IMAGE=$(MIRROR_PREFIX)/docker.io/library/ubuntu:24.04,) \
 		-t ghcr.io/amdresearch/auplc-base:latest --file Dockerfile.rocm .
 	docker tag ghcr.io/amdresearch/auplc-base:latest ghcr.io/amdresearch/auplc-base:latest-$(GPU_TARGET)
@@ -81,6 +85,34 @@ hub:
 		NPM_REGISTRY="$(MIRROR_NPM)" \
 		bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-hub:latest
+
+# --- Code Images ---
+code: code-cpu code-gpu
+
+code-cpu:
+	@echo "-------------------------------------------"; \
+		echo "Building Code CPU Image..."; \
+		echo "-------------------------------------------";
+
+	cd Code && IMAGE_FLAVOR=cpu \
+		BASE_IMAGE=ghcr.io/amdresearch/auplc-default:latest \
+		NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:20-bookworm-slim,)" \
+		NPM_REGISTRY="$(MIRROR_NPM)" \
+		bash ./build.sh
+	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-code-cpu:latest
+
+code-gpu:
+	@echo "-------------------------------------------"; \
+		echo "Building Code GPU Image (GPU_TARGET=$(GPU_TARGET))..."; \
+		echo "-------------------------------------------";
+
+	cd Code && IMAGE_FLAVOR=gpu \
+		BASE_IMAGE=$(CODE_GPU_BASE_IMAGE) \
+		NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:20-bookworm-slim,)" \
+		NPM_REGISTRY="$(MIRROR_NPM)" \
+		bash ./build.sh
+	docker tag ghcr.io/amdresearch/auplc-code-gpu:latest ghcr.io/amdresearch/auplc-code-gpu:latest-$(GPU_TARGET)
+	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-code-gpu:latest
 
 # --- Course Images ---
 courses: cv dl llm physim

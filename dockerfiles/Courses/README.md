@@ -27,3 +27,19 @@ CV and DL are recommended to run on dGPUs, and LLM is suggested to run on 395.
 
 Upon buiding, the scripts inside each folder will copy related notebooks from `projects`, download neccessary files,
 and build then push the image.
+
+Course images remain notebook and course focused. Browser coding environments are built from the separate generic code image line in `dockerfiles/Code/` as `auplc-code-cpu` and `auplc-code-gpu`; do not create per-course VS Code image variants such as course-specific code-server images.
+
+Use the existing course target for course notebook images:
+
+```bash
+make -C dockerfiles courses GPU_TARGET=gfx1151
+```
+
+Use the code targets only for generic code-server environments:
+
+```bash
+make -C dockerfiles code-cpu
+make -C dockerfiles code-gpu GPU_TARGET=gfx1151
+make -C dockerfiles code
+```

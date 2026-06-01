@@ -136,7 +136,7 @@ export function Dashboard() {
         getDashboardOverview(),
         getUsageTimeSeries(days, granularity),
         getDistribution(days),
-        getHourlyDistribution(days),
+        getHourlyDistribution(days, startDate, endDate),
       ]);
       setOverview(ov);
       setDailyUsage(usage.daily_usage);
@@ -148,7 +148,7 @@ export function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [days]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [days, startDate, endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load only time series when granularity changes (skip on initial mount, loadAll handles it)
   const isFirstRender = useRef(true);

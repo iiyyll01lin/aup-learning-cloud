@@ -1,3 +1,22 @@
+# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import importlib.util
 import sys
 import types
@@ -42,6 +61,7 @@ def load_module(name: str, path: Path):
 
 
 groups = load_module("core.groups", CORE / "groups.py")
+resolve_resources_for_user = groups.resolve_resources_for_user
 sync_user_github_teams = groups.sync_user_github_teams
 
 
@@ -57,8 +77,8 @@ class DummyOrmUser:
 
 
 class DummyUser:
-    def __init__(self, groups):
-        self.name = "github:test"
+    def __init__(self, groups, name="github:test"):
+        self.name = name
         self.orm_user = DummyOrmUser(groups)
 
 
@@ -88,3 +108,46 @@ def test_sync_user_github_teams_skips_removals_when_team_fetch_failed():
     sync_user_github_teams(user, None, {"team-a"}, DummyDb())
 
     assert user.orm_user.groups == [existing_group]
+
+
+def test_resolve_resources_for_user_uses_group_mapping():
+    user = DummyUser([DummyGroup("team-a"), DummyGroup("team-b")])
+
+    resources = resolve_resources_for_user(
+        user,
+        {"team-a": ["cpu", "course-a"], "team-b": ["course-a", "course-b"]},
+        "multi",
+        ["cpu", "gpu", "code-cpu", "course-a", "course-b"],
+    )
+
+    assert set(resources) == {"cpu", "course-a", "course-b"}
+    assert resources.count("course-a") == 1
+
+
+def test_resolve_resources_for_user_falls_back_for_native_users():
+    user = DummyUser([], name="native-user")
+
+    resources = resolve_resources_for_user(
+        user,
+        {"official": ["cpu"], "native-users": ["code-cpu"]},
+        "multi",
+        ["cpu", "gpu", "code-cpu"],
+    )
+
+    assert resources == ["code-cpu"]
+
+
+def test_resolve_resources_for_user_denies_unmapped_github_users():
+    user = DummyUser([])
+
+    resources = resolve_resources_for_user(user, {"official": ["cpu"]}, "multi", ["cpu", "gpu"])
+
+    assert resources == ["none"]
+
+
+def test_resolve_resources_for_user_uses_all_resources_for_auto_login():
+    user = DummyUser([], name="demo-user")
+
+    resources = resolve_resources_for_user(user, {"official": ["cpu"]}, "auto-login", ["cpu", "gpu", "code-cpu"])
+
+    assert resources == ["cpu", "gpu", "code-cpu"]

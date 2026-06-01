@@ -21,7 +21,9 @@
 # Build as jupyterhub/singleuser
 # Run with the DockerSpawner in JupyterHub
 
-ARG BASE_IMAGE=quay.io/jupyter/base-notebook
+# Pin to the python-3.12 stream of jupyter/docker-stacks so pre-pulled images
+# (auplc_installer/images.py BUILD_ONLY_IMAGES) match this build's FROM.
+ARG BASE_IMAGE=quay.io/jupyter/base-notebook:python-3.12
 FROM $BASE_IMAGE
 LABEL maintainer="Jupyter Project <jupyter@googlegroups.com>"
 

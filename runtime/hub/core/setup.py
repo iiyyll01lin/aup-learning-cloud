@@ -198,6 +198,7 @@ def setup_hub(c: Any) -> None:
         default_quota=config.quota.defaultQuota,
         team_resource_mapping=dict(config.teams.mapping),
         github_org=config.github_org_name,
+        auth_mode=config.auth_mode,
     )
 
     if not hasattr(c.JupyterHub, "extra_handlers") or c.JupyterHub.extra_handlers is None:

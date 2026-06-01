@@ -447,18 +447,38 @@ class StatsHourlyHandler(APIHandler):
         except ValueError:
             tz_offset = 0
 
+        start_date = self.get_argument("start_date", None)
+        end_date = self.get_argument("end_date", None)
+
         loop = __import__("asyncio").get_event_loop()
-        result = await loop.run_in_executor(None, self._query, days, tz_offset)
+        result = await loop.run_in_executor(None, self._query, days, tz_offset, start_date, end_date)
         self.set_header("Content-Type", "application/json")
         self.finish(json.dumps(result))
 
-    def _query(self, days: int, tz_offset: int):
+    @staticmethod
+    def _date_bounds(days: int, tz_offset: int, start_date: str | None, end_date: str | None):
+        if start_date and end_date:
+            try:
+                start = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(minutes=tz_offset)
+                end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - timedelta(minutes=tz_offset)
+                if start < end:
+                    return start, end
+            except ValueError:
+                pass
+
+        return datetime.now() - timedelta(days=days), None
+
+    def _query(self, days: int, tz_offset: int, start_date: str | None = None, end_date: str | None = None):
         import sqlalchemy as sa
 
-        since = datetime.now() - timedelta(days=days)
+        since, until = self._date_bounds(days, tz_offset, start_date, end_date)
         offset_sign = "+" if tz_offset >= 0 else "-"
         offset_abs = abs(tz_offset)
         offset_expr = f"datetime(start_time, '{offset_sign}{offset_abs} minutes')"
+        end_clause = "AND start_time < :until " if until is not None else ""
+        params = {"since": since}
+        if until is not None:
+            params["until"] = until
 
         with session_scope() as session:
             rows = session.execute(
@@ -469,9 +489,10 @@ class StatsHourlyHandler(APIHandler):
                     "FROM quota_usage_sessions "
                     "WHERE status IN ('completed', 'cleaned_up') "
                     "AND start_time >= :since "
+                    f"{end_clause}"
                     "GROUP BY hour ORDER BY hour ASC"
                 ),
-                {"since": since},
+                params,
             ).fetchall()
 
         by_hour = {int(r[0]): {"sessions": int(r[1]), "minutes": int(r[2])} for r in rows}

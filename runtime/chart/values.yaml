@@ -189,11 +189,19 @@ hub:
     capabilities:
       drop: ["ALL"]
   lifecycle: {}
-  loadRoles: {}
+  loadRoles:
+    prometheus-metrics:
+      description: Allow Prometheus to scrape Hub metrics.
+      scopes:
+        - read:metrics
+      services:
+        - prometheus-metrics
   services:
     # Service account for quota refresh CronJob
     quota-refresh:
       admin: true
+    # Service account for authenticated /hub/metrics scraping.
+    prometheus-metrics: {}
   pdb:
     enabled: false
     maxUnavailable:
@@ -241,6 +249,32 @@ hub:
     name:
     annotations: {}
   extraPodSpec: {}
+
+monitoring:
+  enabled: false
+  namespace: monitoring
+  releaseLabel: monitoring
+  hubMetrics:
+    enabled: false
+    allowUnauthenticatedScrape: false
+    serviceAnnotations:
+      enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+    authorization:
+      enabled: true
+      type: Bearer
+      hubServiceName: prometheus-metrics
+      secret:
+        create: true
+        name: ""
+        key: token
+  grafana:
+    dashboard:
+      enabled: false
+  prometheusRule:
+    enabled: false
 
 rbac:
   create: true
