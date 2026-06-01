@@ -32,6 +32,12 @@ The coding environments are intentionally generic:
 - Existing `auplc-default`, `auplc-base`, and `Course-*` images remain notebook/course-focused.
 - Course-specific VS Code image families are not part of this workflow.
 
+The Code images are the shared developer-toolchain layer. Put browser editor,
+Node.js, TypeScript/frontend, and native build tooling here instead of adding
+those tools to Base notebook images or Course images. CPU and GPU Code images
+are built from the same Dockerfile and differ only by `BASE_IMAGE`, so the Code
+layer stays consistent across hardware targets.
+
 The default Hub resource keys are `code-cpu` and `code-gpu`. Code-server launch behavior is configured through `custom.resources.metadata.<resource>.launchMode: code-server`, alongside the same `custom.resources.images`, `custom.resources.requirements`, and `custom.teams.mapping` model as notebook resources in `runtime/values.yaml`.
 
 ## Build Commands
@@ -48,6 +54,33 @@ make -C dockerfiles code
 
 The Dockerfile pins code-server to version `4.96.4` so builds use a known editor runtime instead of silently changing when a new upstream release appears.
 
+Additional build arguments customize the shared development toolchain:
+
+- `NODE_IMAGE` selects the upstream Node.js image stage. The final image copies
+  Node.js, `npm`, `npx`, `corepack`, and the bundled global Node modules from
+  this stage instead of configuring a NodeSource or apt Node repository. The
+  default is `docker.io/library/node:22-bookworm-slim`.
+- `PNPM_VERSION` pins the `pnpm` version prepared through `corepack` and
+  installed globally for runtime users. The default is `10.27.0`.
+- `CODE_GLOBAL_NPM_PACKAGES` is a space-separated list of small global JS/TS
+  tools installed into the Code image. The default is
+  `typescript tsx vite eslint prettier`.
+- `NPM_REGISTRY` configures the npm registry mirror for both the extension
+  builder stage and the final Node toolchain install.
+- `PIXI_VERSION` pins the Pixi binary installed into `/usr/local/bin`. The
+  default is `v0.68.1`.
+- `PIXI_DOWNLOAD_URL` overrides the Pixi binary URL, which is useful when the
+  build environment must download Pixi from an approved mirror instead of
+  GitHub releases.
+- `PIXI_CONDA_FORGE_MIRROR` configures Pixi's conda-forge channel mirror. The
+  default is Tsinghua TUNA's public mirror at
+  `https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge`. Set this
+  to an internal or regional mirror when required by local policy.
+
+Common apt packages for the Code layer are listed in
+`packages/code-common-apt.txt`. Keep package additions there so CPU and GPU Code
+images continue to share one package set and the Dockerfile remains small.
+
 ## Runtime Behavior
 
 The start script launches:
@@ -63,8 +96,35 @@ code-server on loopback. The proxy must preserve the full browser `Host` value
 with `X-Forwarded-Host` so code-server's WebSocket origin check succeeds behind
 JupyterHub and NodePort-style local URLs.
 
-Git is installed in the image so cloned projects can use source control from the
-integrated terminal and editor UI without additional setup.
+Git, Node.js LTS, `npm`, `npx`, `corepack`, pinned `pnpm`, TypeScript/frontend
+helpers, Pixi, and native build tools are installed in the image so cloned
+projects can use source control, frontend workflows, sudo-free user package
+management, and native npm package builds from the integrated terminal and
+editor UI without additional setup.
+
+The Code images also route user-level global npm installs into the persistent
+home directory instead of `/usr/local`: `NPM_CONFIG_PREFIX` defaults to
+`/home/jovyan/.local`, and `/home/jovyan/.local/bin` is prepended to `PATH`.
+This lets users install small project CLIs with commands such as
+`npm install -g cowsay` without sudo or write access to system directories.
+
+Pixi is provided as the sudo-free, apt-like package manager for user-space
+native tools and project environments. The image writes `/etc/pixi/config.toml`
+so requests for `https://conda.anaconda.org/conda-forge` are redirected to the
+configured mirror and no direct upstream fallback is listed by default. Users can
+create reproducible project environments with commands such as:
+
+```bash
+pixi init my-lab
+cd my-lab
+pixi add cmake pkg-config openssl zlib jq ripgrep
+pixi run jq --version
+```
+
+Pixi remains a user-space package manager. It does not replace image rebuilds or
+cluster administration for kernel modules, GPU/NPU drivers, device plugins,
+udev rules, system services, or packages that must write to root-owned system
+directories.
 
 Extensions are installed into `/opt/auplc/code-server/extensions` during image
 build. At runtime, code-server uses the persistent user extension directory
