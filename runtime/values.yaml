@@ -55,6 +55,53 @@ custom:
     enabled: false
 
   # ============================================================================
+  # Notifications
+  # ============================================================================
+  # Helm value changes require `helm upgrade` and a Hub restart or rollout before
+  # users see updated notices.
+  # Notice id and version identify configured notices only; they do not control
+  # backend dismissal state. Collapsed or expanded topbar state is client-only
+  # and is not persisted.
+  # Markdown and HTML are sanitized by the Hub backend before rendering. Only a
+  # small backend allowlist of tags, attributes, and URL schemes is rendered.
+  notifications:
+    enabled: true
+    topbar:
+      # Disabled by default so the standard install renders no urgent topbar notice.
+      # Set enabled=true and fill id/title/message to show a stateless, collapsible banner.
+      enabled: false
+      id: ""
+      version: "1"
+      severity: warning
+      dismissible: true
+      title: ""
+      message: ""
+      format: markdown
+      link:
+        label: ""
+        url: ""
+      # Optional ISO-8601 strings; invalid time windows are handled by backend validation.
+      startsAt: ""
+      endsAt: ""
+    homepage:
+      enabled: true
+      # When no structured homepage items are active, fall back to the legacy
+      # hub.extraFiles.announcement.txt content mounted as static/announcement.txt.
+      legacyAnnouncementFallback: true
+      items:
+        - id: platform-welcome
+          version: "1"
+          severity: info
+          eyebrow: "Platform"
+          title: "Welcome to AUP Learning Cloud"
+          message: "Get started with GPU-accelerated Jupyter notebooks powered by AMD ROCm technology."
+          format: markdown
+          startsAt: ""
+          endsAt: ""
+          link:
+            label: ""
+            url: ""
+  # ============================================================================
   # Allowed Origins
   # ============================================================================
   # hub.allowedOrigins      — sets Access-Control-Allow-Origin on Hub HTTP responses

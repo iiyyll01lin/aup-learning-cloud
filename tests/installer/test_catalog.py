@@ -33,7 +33,7 @@ class ParseSelectionSpecTests(unittest.TestCase):
         self.assertEqual(sel.picks, list(COURSE_PRESET_ALL))
         self.assertFalse(sel.is_default())  # explicit selection, not the default sentinel
 
-    def test_basic_keyword_picks_cpu_and_gpu_only(self) -> None:
+    def test_basic_keyword_picks_cpu_gpu_and_code_server(self) -> None:
         self.assertEqual(parse_selection_spec("basic").picks, list(COURSE_PRESET_BASIC))
 
     def test_none_keyword_uses_sentinel(self) -> None:
@@ -88,14 +88,17 @@ class CourseSelectionTests(unittest.TestCase):
         self.assertEqual(sel.effective_keys(), ["Course-LLM", "cpu"])
 
     def test_gpu_image_basenames_only_returns_gpu_required(self) -> None:
-        sel = CourseSelection(picks=["cpu", "gpu", "Course-CV"])
-        # cpu is plain-tagged, gpu/Course-CV are GPU-tagged
-        self.assertEqual(sel.gpu_image_basenames(), ["auplc-base", "auplc-cv"])
+        sel = CourseSelection(picks=["cpu", "gpu", "code-gpu", "Course-CV"])
+        # cpu/code-cpu are plain-tagged; gpu/code-gpu/Course-CV are GPU-tagged
+        self.assertEqual(
+            sel.gpu_image_basenames(),
+            ["auplc-base", "auplc-code-gpu", "auplc-cv"],
+        )
         self.assertEqual(sel.plain_image_basenames(), ["auplc-default"])
 
     def test_make_targets_includes_every_selected_course(self) -> None:
-        sel = CourseSelection(picks=["cpu", "Course-DL"])
-        self.assertEqual(sel.make_targets(), ["base-cpu", "dl"])
+        sel = CourseSelection(picks=["cpu", "code-cpu", "Course-DL"])
+        self.assertEqual(sel.make_targets(), ["base-cpu", "code-cpu", "dl"])
 
     def test_description_default(self) -> None:
         self.assertEqual(CourseSelection.default().description(), "all (default)")

@@ -45,6 +45,8 @@ class Course:
 COURSE_CATALOG: tuple[Course, ...] = (
     Course("cpu", "auplc-default", False, "base-cpu", "Base CPU (Python Base Environment)"),
     Course("gpu", "auplc-base", True, "base-rocm", "Base GPU (GPU Base Environment)"),
+    Course("code-cpu", "auplc-code-cpu", False, "code-cpu", "Code Server CPU Environment"),
+    Course("code-gpu", "auplc-code-gpu", True, "code-gpu", "Code Server GPU Environment"),
     Course("Course-CV", "auplc-cv", True, "cv", "Computer Vision Course"),
     Course("Course-DL", "auplc-dl", True, "dl", "Deep Learning Course"),
     Course("Course-LLM", "auplc-llm", True, "llm", "Large Language Model Course"),
@@ -54,7 +56,7 @@ COURSE_CATALOG: tuple[Course, ...] = (
 COURSE_KEYS_ALL: tuple[str, ...] = tuple(c.key for c in COURSE_CATALOG)
 COURSE_BY_KEY: dict[str, Course] = {c.key: c for c in COURSE_CATALOG}
 
-COURSE_PRESET_BASIC: tuple[str, ...] = ("cpu", "gpu")
+COURSE_PRESET_BASIC: tuple[str, ...] = ("cpu", "gpu", "code-cpu", "code-gpu")
 COURSE_PRESET_ALL: tuple[str, ...] = COURSE_KEYS_ALL
 
 
@@ -78,12 +80,39 @@ HUB_IMAGE_NAME = "auplc-hub"
 
 
 BASE_TEAM_MAPPING: dict[str, list[str]] = {
-    "cpu": ["cpu"],
-    "gpu": ["Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
-    "official": ["cpu", "gpu", "Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
+    "cpu": ["cpu", "code-cpu"],
+    "gpu": ["code-gpu", "Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
+    "official": [
+        "cpu",
+        "gpu",
+        "code-cpu",
+        "code-gpu",
+        "Course-CV",
+        "Course-DL",
+        "Course-LLM",
+        "Course-PhySim",
+    ],
     "AUP": ["Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
-    "native-users": ["Course-CV", "Course-DL", "Course-LLM", "Course-PhySim", "cpu", "gpu"],
-    "github-users": ["cpu", "gpu", "Course-CV", "Course-DL", "Course-LLM", "Course-PhySim"],
+    "native-users": [
+        "code-cpu",
+        "code-gpu",
+        "Course-CV",
+        "Course-DL",
+        "Course-LLM",
+        "Course-PhySim",
+        "cpu",
+        "gpu",
+    ],
+    "github-users": [
+        "cpu",
+        "gpu",
+        "code-cpu",
+        "code-gpu",
+        "Course-CV",
+        "Course-DL",
+        "Course-LLM",
+        "Course-PhySim",
+    ],
 }
 
 

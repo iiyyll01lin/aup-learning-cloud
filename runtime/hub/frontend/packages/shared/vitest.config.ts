@@ -17,10 +17,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export * from "./user.js";
-export * from "./quota.js";
-export * from "./accelerator.js";
-export * from "./resource.js";
-export * from "./hub.js";
-export * from "./stats.js";
-export * from "./notification.js";
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    globals: true,
+    passWithNoTests: true,
+  },
+})

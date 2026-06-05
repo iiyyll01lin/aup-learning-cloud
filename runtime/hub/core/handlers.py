@@ -43,6 +43,7 @@ from tornado import web
 
 from core.authenticators import CustomFirstUseAuthenticator
 from core.git_validation import validate_and_sanitize_repo_url
+from core.notifications import get_normalized_notifications
 from core.quota import (
     BatchQuotaRequest,
     QuotaAction,
@@ -1318,6 +1319,14 @@ class PlatformInfoHandler(APIHandler):
         )
 
 
+class NotificationsAPIHandler(BaseHandler):
+    """Public read-only endpoint returning active sanitized notification metadata."""
+
+    async def get(self):
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(get_normalized_notifications()))
+
+
 # =============================================================================
 # Group Management API Handlers
 # =============================================================================
@@ -1594,6 +1603,8 @@ def get_handlers() -> list[tuple[str, type]]:
     return [
         # Platform identity (unauthenticated — always accessible)
         (r"/api/platform", PlatformInfoHandler),
+        # Active notifications (unauthenticated read-only sanitized config)
+        (r"/api/notifications", NotificationsAPIHandler),
         # Onboarding API
         (r"/api/onboarding/me", GetMyOnboardingHandler),
         (r"/api/onboarding/dismiss", DismissMyOnboardingHandler),
@@ -1646,6 +1657,7 @@ def get_handlers() -> list[tuple[str, type]]:
 __all__ = [
     # Platform identity
     "PlatformInfoHandler",
+    "NotificationsAPIHandler",
     # Onboarding handlers
     "GetMyOnboardingHandler",
     "DismissMyOnboardingHandler",

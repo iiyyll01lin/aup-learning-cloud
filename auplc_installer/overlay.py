@@ -29,6 +29,7 @@ from auplc_installer.util import InstallerError, log
 # so YAML emission is deterministic.
 _RESOURCE_IMAGE_BASE: dict[str, str] = {
     "gpu": "auplc-base",
+    "code-gpu": "auplc-code-gpu",
     "Course-CV": "auplc-cv",
     "Course-DL": "auplc-dl",
     "Course-LLM": "auplc-llm",
@@ -62,7 +63,7 @@ def emit_overlay(
     if not homogeneous_target:
         targets = " ".join(s.gpu_target for s in cfg.skus)
         buf.write(f"# Mixed gfx targets: {targets}\n")
-    buf.write(f"# Course selection : {courses.description()}\n")
+    buf.write(f"# Env selection : {courses.description()}\n")
     buf.write("# Regenerated on install/upgrade.\n")
     buf.write("custom:\n")
 
@@ -188,7 +189,7 @@ def generate_values_overlay(
 # header by :func:`emit_overlay`. Used by upgrade flows so that a bare
 # ``rt upgrade`` (no ``--courses=`` flag) preserves whatever the user
 # originally installed with instead of silently expanding to "all".
-_COURSE_HEADER_RE = re.compile(r"^# Course selection\s*:\s*(.+?)\s*$")
+_COURSE_HEADER_RE = re.compile(r"^# (?:Env selection|Course selection)\s*:\s*(.+?)\s*$")
 
 
 def try_load_courses_from_overlay(overlay_path: Path) -> CourseSelection | None:

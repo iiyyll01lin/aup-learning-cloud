@@ -571,41 +571,67 @@ def _flow_collect_mirrors(state: InstallerState) -> None:
     )
 
 
-def _flow_select_courses(state: InstallerState) -> None:
-    """Course selection: preset (all/basic/custom). Custom opens a checklist."""
-    current_label = state.courses.description()
-    preset = _ask_select(
-        f"Course selection — current: {current_label}",
-        (
-            Choice("all", "all    — every course (default; identical to current CLI behaviour)"),
-            Choice("basic", "basic  — cpu base + gpu base only"),
-            Choice("custom", "custom — pick courses individually"),
-        ),
-        default_value="all" if state.courses.is_default() else "custom",
-    )
-    if preset == "all":
-        state.courses = CourseSelection(picks=list(COURSE_PRESET_ALL))
-        return
-    if preset == "basic":
-        state.courses = CourseSelection(picks=list(COURSE_PRESET_BASIC))
-        return
+def _flow_select_envs(state: InstallerState, *, allow_back: bool = False) -> bool:
+    """Environment selection: preset (all/basic/custom). Custom opens a checklist.
 
-    # custom: checklist
-    choices = [Choice(c.key, f"{c.key:<14} - {c.display_name}") for c in COURSE_CATALOG]
-    if state.courses.is_default() or state.courses.is_none():
-        preselected: list[str] = list(COURSE_PRESET_ALL) if state.courses.is_default() else []
-    else:
-        preselected = list(state.courses.picks)
+    Returns ``True`` when the user confirms a selection, ``False`` when they
+    choose ``← Back`` on the preset menu (only offered when ``allow_back``).
+    """
+    while True:
+        current_label = state.courses.description()
+        preset_choices: list[Choice] = [
+            Choice("all", "all    — every environment (default)"),
+            Choice("basic", "basic  — base + code-server (cpu, gpu, code-cpu, code-gpu)"),
+            Choice("custom", "custom — pick environments individually"),
+        ]
+        if allow_back:
+            preset_choices.append(Choice("back", "← Back"))
 
-    picks = _ask_checkbox(
-        "Pick courses to install (space toggles, Enter confirms; nothing selected = Hub only)",
-        choices,
-        preselected=preselected,
-    )
-    if not picks:
-        state.courses = CourseSelection(picks=[NONE_SENTINEL])
-    else:
-        state.courses = CourseSelection(picks=picks)
+        preset = _ask_select(
+            f"Env selection — current: {current_label}",
+            preset_choices,
+            default_value="all" if state.courses.is_default() else "custom",
+        )
+        if preset == "back":
+            return False
+        if preset == "all":
+            state.courses = CourseSelection(picks=list(COURSE_PRESET_ALL))
+            return True
+        if preset == "basic":
+            state.courses = CourseSelection(picks=list(COURSE_PRESET_BASIC))
+            return True
+
+        # custom: checklist with an explicit path back to the preset menu
+        action = _ask_select(
+            "Custom env selection",
+            (
+                Choice("pick", "Pick environments (checkbox)"),
+                Choice("back", "← Back to presets"),
+            ),
+        )
+        if action == "back":
+            continue
+
+        choices = [Choice(c.key, f"{c.key:<14} - {c.display_name}") for c in COURSE_CATALOG]
+        if state.courses.is_default() or state.courses.is_none():
+            preselected: list[str] = list(COURSE_PRESET_ALL) if state.courses.is_default() else []
+        else:
+            preselected = list(state.courses.picks)
+
+        picks = _ask_checkbox(
+            "Pick environments to install (space toggles, Enter confirms; nothing selected = Hub only)",
+            choices,
+            preselected=preselected,
+        )
+        if not picks:
+            state.courses = CourseSelection(picks=[NONE_SENTINEL])
+        else:
+            state.courses = CourseSelection(picks=picks)
+        return True
+
+
+# Back-compat alias for any external callers.
+_flow_select_courses = _flow_select_envs
 
 
 # ---------------------------------------------------------------------------
@@ -623,20 +649,28 @@ def _flow_install(state: InstallerState) -> None:
         image_source_label = f"Offline bundle ({state.bundle_dir})"
         pull = False
     else:
-        image_source = _ask_select(
-            "Image source",
-            (
-                Choice("pull", "pull  - fetch pre-built images from registry (default)"),
-                Choice("build", "build - build from dockerfiles/ via Makefile"),
-            ),
-            default_value="pull",
-        )
-        image_source_label = image_source
-        pull = image_source == "pull"
-        _flow_collect_image_coords(state)
-        _flow_collect_mirrors(state)
+        while True:
+            image_source = _ask_select(
+                "Image source",
+                (
+                    Choice("pull", "pull  - fetch pre-built images from registry (default)"),
+                    Choice("build", "build - build from dockerfiles/ via Makefile"),
+                ),
+                default_value="pull",
+            )
+            image_source_label = image_source
+            pull = image_source == "pull"
+            _flow_collect_image_coords(state)
+            _flow_collect_mirrors(state)
+            if _flow_select_envs(state, allow_back=True):
+                break
 
-    _flow_select_courses(state)
+    if state.offline_mode:
+        while True:
+            if _flow_select_envs(state, allow_back=True):
+                break
+            # Back from env selection in offline mode returns to GPU step.
+            _flow_select_gpu(state)
 
     log("\n" + format_configuration_summary_colored(state, image_source_label=image_source_label) + "\n")
     if not _ask_confirm("Proceed with installation?", default=True):
@@ -663,9 +697,11 @@ def _flow_pack(state: InstallerState, source_root) -> None:
         ),
         default_value="pull",
     )
-    _flow_collect_image_coords(state)
-    _flow_collect_mirrors(state)
-    _flow_select_courses(state)
+    while True:
+        _flow_collect_image_coords(state)
+        _flow_collect_mirrors(state)
+        if _flow_select_envs(state, allow_back=True):
+            break
 
     log("\n" + format_configuration_summary_colored(state, image_source_label=pack_mode))
     log("\nThis will create an offline bundle archive in the current directory.")
@@ -703,24 +739,12 @@ def _flow_install_tools(state: InstallerState) -> None:
 def _flow_dev(state: InstallerState) -> None:
     """Dev sub-menu: pick one action, run it, then return.
 
-    ``upgrade`` does NOT re-prompt for courses — the previous selection
+    ``upgrade`` does NOT re-prompt for environments — the previous selection
     is preserved by ``cmd_dev_upgrade`` reading the existing overlay
     header. ``deploy`` / ``reinstall`` still ask because they're "fresh"
     from the user's point of view (a dev-overlay redeploy is allowed to
     change scope).
     """
-    sub = _ask_select(
-        "Dev mode",
-        (
-            Choice("quick", "quick     — rebuild Hub image and restart pod"),
-            Choice("deploy", "deploy    — install with dev overlay (student=admin)"),
-            Choice("upgrade", "upgrade   — helm upgrade with dev overlay"),
-            Choice("reinstall", "reinstall — uninstall + redeploy with dev overlay"),
-            Choice("cancel", "← Cancel (back to main menu)"),
-        ),
-    )
-    if sub == "cancel":
-        raise _CancelledError
     from auplc_installer.cli import (
         cmd_dev_deploy,
         cmd_dev_quick,
@@ -728,39 +752,50 @@ def _flow_dev(state: InstallerState) -> None:
         cmd_dev_upgrade,
     )
 
-    if sub == "quick":
-        cmd_dev_quick(state)
-    elif sub == "deploy":
-        _flow_select_courses(state)
-        cmd_dev_deploy(state)
-    elif sub == "upgrade":
-        # No course prompt: cmd_dev_upgrade preserves the previous selection.
-        cmd_dev_upgrade(state)
-    elif sub == "reinstall":
-        if not _ask_confirm("Uninstall and redeploy JupyterHub (dev overlay)?", default=False):
+    while True:
+        sub = _ask_select(
+            "Dev mode",
+            (
+                Choice("quick", "quick     — rebuild Hub image and restart pod"),
+                Choice("deploy", "deploy    — install with dev overlay (student=admin)"),
+                Choice("upgrade", "upgrade   — helm upgrade with dev overlay"),
+                Choice("reinstall", "reinstall — uninstall + redeploy with dev overlay"),
+                Choice("cancel", "← Cancel (back to main menu)"),
+            ),
+        )
+        if sub == "cancel":
             raise _CancelledError
-        _flow_select_courses(state)
-        cmd_dev_reinstall(state)
+
+        if sub == "quick":
+            cmd_dev_quick(state)
+            return
+        if sub == "upgrade":
+            cmd_dev_upgrade(state)
+            return
+        if sub == "deploy":
+            while True:
+                if _flow_select_envs(state, allow_back=True):
+                    cmd_dev_deploy(state)
+                    return
+                break
+            continue
+        if sub == "reinstall":
+            if not _ask_confirm("Uninstall and redeploy JupyterHub (dev overlay)?", default=False):
+                raise _CancelledError
+            while True:
+                if _flow_select_envs(state, allow_back=True):
+                    cmd_dev_reinstall(state)
+                    return
+                break
+            continue
 
 
 def _flow_rt(state: InstallerState) -> None:
     """Runtime (Helm-only) sub-menu: pick one action, run it, then return.
 
     See ``_flow_dev`` for the rationale on why ``upgrade`` skips the
-    course prompt.
+    environment prompt.
     """
-    sub = _ask_select(
-        "Runtime (Helm) only",
-        (
-            Choice("install", "install   — deploy JupyterHub"),
-            Choice("upgrade", "upgrade   — helm upgrade (for values changes)"),
-            Choice("reinstall", "reinstall — uninstall then redeploy"),
-            Choice("remove", "remove    — uninstall the Helm release"),
-            Choice("cancel", "← Cancel (back to main menu)"),
-        ),
-    )
-    if sub == "cancel":
-        raise _CancelledError
     from auplc_installer.cli import (
         cmd_rt_install,
         cmd_rt_reinstall,
@@ -768,42 +803,71 @@ def _flow_rt(state: InstallerState) -> None:
         cmd_rt_upgrade,
     )
 
-    if sub == "install":
-        _flow_select_courses(state)
-        cmd_rt_install(state)
-    elif sub == "upgrade":
-        # No course prompt: cmd_rt_upgrade preserves the previous selection.
-        cmd_rt_upgrade(state)
-    elif sub == "reinstall":
-        if not _ask_confirm("Uninstall and redeploy JupyterHub?", default=False):
+    while True:
+        sub = _ask_select(
+            "Runtime (Helm) only",
+            (
+                Choice("install", "install   — deploy JupyterHub"),
+                Choice("upgrade", "upgrade   — helm upgrade (for values changes)"),
+                Choice("reinstall", "reinstall — uninstall then redeploy"),
+                Choice("remove", "remove    — uninstall the Helm release"),
+                Choice("cancel", "← Cancel (back to main menu)"),
+            ),
+        )
+        if sub == "cancel":
             raise _CancelledError
-        _flow_select_courses(state)
-        cmd_rt_reinstall(state)
-    elif sub == "remove":
-        if not _ask_confirm("Uninstall the JupyterHub Helm release? (K3s remains.)", default=False):
-            raise _CancelledError
-        cmd_rt_remove(state)
+
+        if sub == "install":
+            while True:
+                if _flow_select_envs(state, allow_back=True):
+                    cmd_rt_install(state)
+                    return
+                break
+            continue
+        if sub == "upgrade":
+            cmd_rt_upgrade(state)
+            return
+        if sub == "reinstall":
+            if not _ask_confirm("Uninstall and redeploy JupyterHub?", default=False):
+                raise _CancelledError
+            while True:
+                if _flow_select_envs(state, allow_back=True):
+                    cmd_rt_reinstall(state)
+                    return
+                break
+            continue
+        if sub == "remove":
+            if not _ask_confirm("Uninstall the JupyterHub Helm release? (K3s remains.)", default=False):
+                raise _CancelledError
+            cmd_rt_remove(state)
+            return
 
 
 def _flow_img(state: InstallerState) -> None:
     """Image management sub-menu: pick one action, run it, then return."""
-    sub = _ask_select(
-        "Image management",
-        (
-            Choice("build", "build — build custom images via Makefile"),
-            Choice("pull", "pull  — pull external images for offline use"),
-            Choice("cancel", "← Cancel (back to main menu)"),
-        ),
-    )
-    if sub == "cancel":
-        raise _CancelledError
     from auplc_installer.cli import cmd_img_build, cmd_img_pull
 
-    if sub == "build":
-        _flow_select_courses(state)
-        cmd_img_build(state, [])
-    elif sub == "pull":
-        cmd_img_pull(state)
+    while True:
+        sub = _ask_select(
+            "Image management",
+            (
+                Choice("build", "build — build custom images via Makefile"),
+                Choice("pull", "pull  — pull external images for offline use"),
+                Choice("cancel", "← Cancel (back to main menu)"),
+            ),
+        )
+        if sub == "cancel":
+            raise _CancelledError
+        if sub == "pull":
+            cmd_img_pull(state)
+            return
+        if sub == "build":
+            while True:
+                if _flow_select_envs(state, allow_back=True):
+                    cmd_img_build(state, [])
+                    return
+                break
+            continue
 
 
 # ---------------------------------------------------------------------------

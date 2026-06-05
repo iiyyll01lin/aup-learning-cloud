@@ -17,12 +17,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ARG NODE_IMAGE=docker.io/library/node:20-bookworm-slim
+ARG NODE_IMAGE=docker.io/library/node:22-bookworm-slim
 ARG BASE_IMAGE=ghcr.io/amdresearch/auplc-default:latest
 ARG IMAGE_FLAVOR=cpu
 ARG CODE_SERVER_VERSION=4.96.4
 
-FROM ${NODE_IMAGE} AS hub-link-builder
+FROM ${NODE_IMAGE} AS node-runtime
+
+FROM node-runtime AS hub-link-builder
 
 ARG NPM_REGISTRY=
 WORKDIR /build/auplc-hub-link
@@ -39,15 +41,34 @@ FROM ${BASE_IMAGE}
 
 ARG CODE_SERVER_VERSION=4.96.4
 ARG IMAGE_FLAVOR
+ARG NPM_REGISTRY=
+ARG PNPM_VERSION=10.27.0
+ARG CODE_GLOBAL_NPM_PACKAGES
+ARG PIXI_VERSION=v0.68.1
+ARG PIXI_DOWNLOAD_URL=
+ARG PIXI_CONDA_FORGE_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
 USER root
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl git nginx-light && \
-    curl -fsSL -o /tmp/code-server.deb https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server_${CODE_SERVER_VERSION}_amd64.deb && \
-    apt-get install -y --no-install-recommends /tmp/code-server.deb && \
-    rm -f /tmp/code-server.deb && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+COPY packages/code-common-apt.txt /opt/auplc/build/code-common-apt.txt
+COPY scripts/install-code-system-packages.sh scripts/install-node-toolchain.sh scripts/install-pixi-toolchain.sh /usr/local/bin/
+
+RUN chmod +x /usr/local/bin/install-code-system-packages.sh /usr/local/bin/install-node-toolchain.sh /usr/local/bin/install-pixi-toolchain.sh && \
+    /usr/local/bin/install-code-system-packages.sh /opt/auplc/build/code-common-apt.txt
+
+RUN /usr/local/bin/install-pixi-toolchain.sh
+
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
+    ln -sf ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
+
+RUN /usr/local/bin/install-node-toolchain.sh
+
+ENV NPM_CONFIG_PREFIX=/home/jovyan/.local
+ENV PIXI_HOME=/home/jovyan/.pixi
+ENV PATH=/home/jovyan/.local/bin:/home/jovyan/.pixi/bin:${PATH}
 
 COPY extensions.txt /opt/auplc/extensions/extensions.txt
 COPY extensions/ /opt/auplc/extensions/local/
@@ -60,8 +81,11 @@ RUN chmod +x /usr/local/bin/start-code-server.sh && \
         /opt/auplc/code-server/extensions \
         /home/jovyan/.cache \
         /home/jovyan/.config \
-        /home/jovyan/.local/share/code-server && \
-    chown -R jovyan:100 /opt/auplc /home/jovyan/.cache /home/jovyan/.config /home/jovyan/.local
+        /home/jovyan/.local/bin \
+        /home/jovyan/.local/share/code-server \
+        /home/jovyan/.pixi/bin \
+        /home/jovyan/.npm && \
+    chown -R jovyan:100 /opt/auplc /home/jovyan/.cache /home/jovyan/.config /home/jovyan/.local /home/jovyan/.pixi /home/jovyan/.npm
 
 USER jovyan
 

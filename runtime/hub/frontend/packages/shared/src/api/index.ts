@@ -24,3 +24,4 @@ export * from "./accelerators.js";
 export * from "./resources.js";
 export * from "./git.js";
 export * from "./stats.js";
+export * from "./notifications.js";

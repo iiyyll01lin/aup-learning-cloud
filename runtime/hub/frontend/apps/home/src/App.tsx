@@ -18,8 +18,9 @@
 // SOFTWARE.
 
 import { useState, useEffect, useCallback } from "react";
-import type { Resource, ResourceGroup, UserQuotaInfo, UserDetail } from "@auplc/shared";
+import type { NotificationItem, Resource, ResourceGroup, UserQuotaInfo, UserDetail } from "@auplc/shared";
 import {
+  getNotifications,
   getMyQuota,
   getMyUsage,
   getResources,
@@ -80,6 +81,63 @@ const homeData: HomeData = window.HOME_DATA ?? {
   server_url: `${baseUrl.replace(/\/?$/, "/")}user/${jhdata.user ?? "student"}/`,
 };
 
+const homepageAnnouncementTitleStyles = `
+.homepage-announcement-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 0.2rem;
+  color: var(--home-text);
+}
+.homepage-announcement-title p,
+.homepage-announcement-title ul,
+.homepage-announcement-title ol {
+  font: inherit;
+  color: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+`;
+
+async function fetchLegacyAnnouncement(): Promise<string | null> {
+  const resp = await fetch(`${baseUrl}static/announcement.txt`);
+  if (!resp.ok) throw new Error("Not found");
+
+  const data = (await resp.text()).trim();
+  return data || null;
+}
+
+function HomepageAnnouncementCard({ item }: { item: NotificationItem }) {
+  const eyebrow = item.eyebrow?.trim() || "Announcement";
+  const sanitizedTitleHtml = item.titleHtml.trim();
+  const sanitizedMessageHtml = item.messageHtml.trim();
+
+  return (
+    <div className="news-card">
+      <div className="news-meta">{eyebrow}</div>
+      {sanitizedTitleHtml && (
+        <div
+          aria-level={4}
+          className="homepage-announcement-title"
+          dangerouslySetInnerHTML={{ __html: sanitizedTitleHtml }}
+          role="heading"
+        />
+      )}
+      {sanitizedMessageHtml && (
+        <div dangerouslySetInnerHTML={{ __html: sanitizedMessageHtml }} />
+      )}
+      {item.link && (
+        <p>
+          <a href={item.link.url} rel={item.link.rel ?? "noopener noreferrer"}>
+            {item.link.label}
+          </a>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function formatResourceSpecs(r: Resource): string {
   const req = r.requirements;
   const parts: string[] = [];
@@ -120,7 +178,8 @@ function App() {
   const [showUsage, setShowUsage] = useState(false);
   const [usageData, setUsageData] = useState<UserDetail | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
-  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const [homepageAnnouncements, setHomepageAnnouncements] = useState<NotificationItem[]>([]);
+  const [legacyAnnouncement, setLegacyAnnouncement] = useState<string | null>(null);
   const [groups, setGroups] = useState<ResourceGroup[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
   const [resourcesError, setResourcesError] = useState<string | null>(null);
@@ -256,15 +315,43 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetch(`${baseUrl}static/announcement.txt`)
-      .then((resp) => {
-        if (!resp.ok) throw new Error("Not found");
-        return resp.text();
-      })
-      .then((data) => {
-        if (data?.trim()) setAnnouncement(data.trim());
-      })
-      .catch(() => {});
+    let cancelled = false;
+
+    const loadLegacyAnnouncement = async () => {
+      const fallback = await fetchLegacyAnnouncement().catch(() => null);
+      if (!cancelled) setLegacyAnnouncement(fallback);
+    };
+
+    const loadHomepageAnnouncements = async () => {
+      try {
+        const notifications = await getNotifications();
+        const items = notifications.homepage.items;
+
+        if (cancelled) return;
+
+        if (items.length > 0) {
+          setHomepageAnnouncements(items);
+          setLegacyAnnouncement(null);
+          return;
+        }
+
+        setHomepageAnnouncements([]);
+        if (notifications.homepage.legacyAnnouncementFallback) {
+          await loadLegacyAnnouncement();
+        } else {
+          setLegacyAnnouncement(null);
+        }
+      } catch {
+        if (!cancelled) setHomepageAnnouncements([]);
+        await loadLegacyAnnouncement();
+      }
+    };
+
+    void loadHomepageAnnouncements();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -343,6 +430,7 @@ function App() {
 
   return (
     <div className="home-page">
+      <style>{homepageAnnouncementTitleStyles}</style>
       {/* Hero */}
       <section className="home-hero">
         <div className="container" style={{ position: "relative" }}>
@@ -684,28 +772,28 @@ function App() {
             </div>
             <div>
               <div className="home-section-header">
-                <h2>News &amp; Updates</h2>
+                <h2 id="home-news-updates-heading">News &amp; Updates</h2>
               </div>
-              <div className="news-list">
-                {announcement && (
+              <div
+                aria-labelledby="home-news-updates-heading"
+                className="news-list"
+                role="region"
+                tabIndex={0}
+              >
+                {homepageAnnouncements.map((item) => (
+                  <HomepageAnnouncementCard key={`${item.id}:${item.version}`} item={item} />
+                ))}
+                {legacyAnnouncement && homepageAnnouncements.length === 0 && (
                   <div className="news-card">
                     <div className="news-meta">Announcement</div>
                     <h4>Platform Announcement</h4>
-                    {/<[a-z][\s\S]*>/i.test(announcement) ? (
-                      <div dangerouslySetInnerHTML={{ __html: announcement }} />
+                    {/<[a-z][\s\S]*>/i.test(legacyAnnouncement) ? (
+                      <div dangerouslySetInnerHTML={{ __html: legacyAnnouncement }} />
                     ) : (
-                      <p>{announcement}</p>
+                      <p>{legacyAnnouncement}</p>
                     )}
                   </div>
                 )}
-                <div className="news-card">
-                  <div className="news-meta">Platform</div>
-                  <h4>Welcome to {PLATFORM_NAME}</h4>
-                  <p>
-                    Get started with GPU-accelerated Jupyter notebooks powered
-                    by AMD ROCm technology.
-                  </p>
-                </div>
               </div>
             </div>
           </div>

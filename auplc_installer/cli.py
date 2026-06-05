@@ -46,6 +46,7 @@ from auplc_installer.util import (
     ensure_sudo_session,
     log,
     log_error,
+    log_success,
     set_verbose,
     start_sudo_keepalive,
 )
@@ -99,7 +100,7 @@ Commands:
   rt remove             Remove JupyterHub runtime
 
   img build [target...] Build custom images (default: all, or hub + selected courses)
-                        Targets: all, hub, base-cpu, base-rocm, cv, dl, llm, physim
+                        Targets: all, hub, base-cpu, base-rocm, code, code-cpu, code-gpu, cv, dl, llm, physim
   img pull              Pull external images for offline use
 
   detect-gpu            Show detected GPU configuration
@@ -146,7 +147,7 @@ Options (can also be set via environment variables):
                     unselected courses are hidden in the spawn UI. Empty (the
                     default) keeps the historical "all courses" behaviour.
                       all     - every course
-                      basic   - cpu base + gpu base only
+                      basic   - cpu/gpu base + code-server (code-cpu, code-gpu)
                       none    - Hub only, no courses
                       <list>  - comma-separated keys, e.g. cpu,gpu,Course-CV
                     Env: AUPLC_COURSES
@@ -176,7 +177,7 @@ Options (can also be set via environment variables):
     ./auplc-installer install --gpu=strix-halo
     ./auplc-installer install --gpu=auto --dry-run
     ./auplc-installer install --gpu=phx --docker=0     # legacy flags
-    ./auplc-installer install --courses=basic          # cpu + gpu only
+    ./auplc-installer install --courses=basic          # base + code-server envs
     ./auplc-installer install --courses=cpu,gpu,Course-CV
     ./auplc-installer img build base-rocm --gpu=strix
     ./auplc-installer install --mirror=mirror.example.com
@@ -565,17 +566,19 @@ def cmd_dev_quick(state: InstallerState) -> None:
     log("Dev quick cycle: build hub → restart pod")
     log("===========================================")
     detect_and_configure_gpu(state.gpu, gpu_type_override=state.gpu_type)
-    local_image_build(
-        ["hub"],
-        cfg=state.gpu,
-        courses=state.courses,
-        mirror_prefix=state.mirror_prefix,
-        mirror_pip=state.mirror_pip,
-        mirror_npm=state.mirror_npm,
-        use_docker=state.use_docker,
-        k3s_images_dir=state.k3s_images_dir,
-    )
-    dev_quick_rollout()
+    with stage("Building Hub image", idx=1, total=2):
+        local_image_build(
+            ["hub"],
+            cfg=state.gpu,
+            courses=state.courses,
+            mirror_prefix=state.mirror_prefix,
+            mirror_pip=state.mirror_pip,
+            mirror_npm=state.mirror_npm,
+            use_docker=state.use_docker,
+            k3s_images_dir=state.k3s_images_dir,
+        )
+    with stage("Restarting Hub pod", idx=2, total=2):
+        dev_quick_rollout()
 
 
 def cmd_dev_deploy(state: InstallerState) -> None:
@@ -686,25 +689,29 @@ def cmd_rt_reinstall(state: InstallerState) -> None:
 
 def cmd_img_build(state: InstallerState, targets: Sequence[str]) -> None:
     detect_and_configure_gpu(state.gpu, gpu_type_override=state.gpu_type)
-    local_image_build(
-        targets,
-        cfg=state.gpu,
-        courses=state.courses,
-        mirror_prefix=state.mirror_prefix,
-        mirror_pip=state.mirror_pip,
-        mirror_npm=state.mirror_npm,
-        use_docker=state.use_docker,
-        k3s_images_dir=state.k3s_images_dir,
-    )
+    with stage("Building custom images", idx=1, total=1):
+        local_image_build(
+            targets,
+            cfg=state.gpu,
+            courses=state.courses,
+            mirror_prefix=state.mirror_prefix,
+            mirror_pip=state.mirror_pip,
+            mirror_npm=state.mirror_npm,
+            use_docker=state.use_docker,
+            k3s_images_dir=state.k3s_images_dir,
+        )
+    log_success("Custom images built successfully.")
 
 
 def cmd_img_pull(state: InstallerState) -> None:
-    pull_external_images(
-        skip_build_only=False,
-        use_docker=state.use_docker,
-        k3s_images_dir=state.k3s_images_dir,
-        mirror_prefix=state.mirror_prefix,
-    )
+    with stage("Pulling external images", idx=1, total=1):
+        pull_external_images(
+            skip_build_only=False,
+            use_docker=state.use_docker,
+            k3s_images_dir=state.k3s_images_dir,
+            mirror_prefix=state.mirror_prefix,
+        )
+    log_success("External images pulled successfully.")
 
 
 # ---------------------------------------------------------------------------
@@ -871,7 +878,7 @@ def _dispatch(
         else:
             log_error(
                 "Usage: auplc-installer img {build [target...]|pull}. "
-                "Targets: all, hub, base-cpu, base-rocm, cv, dl, llm, physim"
+                "Targets: all, hub, base-cpu, base-rocm, code, code-cpu, code-gpu, cv, dl, llm, physim"
             )
             sys.exit(1)
         return

@@ -17,10 +17,39 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-export * from "./user.js";
-export * from "./quota.js";
-export * from "./accelerator.js";
-export * from "./resource.js";
-export * from "./hub.js";
-export * from "./stats.js";
-export * from "./notification.js";
+export type NotificationSeverity = "info" | "success" | "warning" | "danger";
+
+export type NotificationFormat = "text" | "markdown" | "html";
+
+export interface NotificationLink {
+  label: string;
+  url: string;
+  rel?: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  version: string;
+  dismissalKey?: string;
+  severity: NotificationSeverity;
+  dismissible: boolean;
+  format: NotificationFormat;
+  eyebrow?: string;
+  titleHtml: string;
+  messageHtml: string;
+  link: NotificationLink | null;
+  startsAt: string | null;
+  endsAt: string | null;
+}
+
+export interface HomepageNotifications {
+  enabled: boolean;
+  legacyAnnouncementFallback: boolean;
+  items: NotificationItem[];
+}
+
+export interface NotificationsResponse {
+  enabled: boolean;
+  topbar: NotificationItem | null;
+  homepage: HomepageNotifications;
+}

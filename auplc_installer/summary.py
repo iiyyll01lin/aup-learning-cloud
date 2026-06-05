@@ -68,7 +68,7 @@ def format_configuration_summary(state: InstallerState, *, image_source_label: s
     lines.append(f"  Registry mirror  : {state.mirror_prefix or '(none)'}")
     lines.append(f"  PyPI mirror      : {state.mirror_pip or '(default)'}")
     lines.append(f"  npm mirror       : {state.mirror_npm or '(default)'}")
-    lines.append(f"  Courses          : {state.courses.description()}")
+    lines.append(f"  Environments     : {state.courses.description()}")
     return "\n".join(lines)
 
 
@@ -104,5 +104,5 @@ def format_configuration_summary_colored(state: InstallerState, *, image_source_
         lines.append(row("npm mirror", state.mirror_npm))
     else:
         lines.append(row("npm mirror", "(default)", faint=True))
-    lines.append(row("Courses", state.courses.description(), accent=True))
+    lines.append(row("Environments", state.courses.description(), accent=True))
     return "\n".join(lines)

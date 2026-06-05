@@ -43,7 +43,7 @@ endif
 .PHONY: all base base-cpu base-rocm base-gfx1151 hub code code-cpu code-gpu courses cv dl llm physim
 
 # Build all images
-all: base hub courses
+all: base hub code courses
 
 # --- Base Images ---
 base: base-cpu base-rocm
@@ -96,7 +96,7 @@ code-cpu:
 
 	cd Code && IMAGE_FLAVOR=cpu \
 		BASE_IMAGE=ghcr.io/amdresearch/auplc-default:latest \
-		NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:20-bookworm-slim,)" \
+		NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:22-bookworm-slim,)" \
 		NPM_REGISTRY="$(MIRROR_NPM)" \
 		bash ./build.sh
 	$(MAKE) save-image IMAGE=ghcr.io/amdresearch/auplc-code-cpu:latest
@@ -108,7 +108,7 @@ code-gpu:
 
 	cd Code && IMAGE_FLAVOR=gpu \
 		BASE_IMAGE=$(CODE_GPU_BASE_IMAGE) \
-		NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:20-bookworm-slim,)" \
+		NODE_IMAGE="$(if $(MIRROR_PREFIX),$(MIRROR_PREFIX)/docker.io/library/node:22-bookworm-slim,)" \
 		NPM_REGISTRY="$(MIRROR_NPM)" \
 		bash ./build.sh
 	docker tag ghcr.io/amdresearch/auplc-code-gpu:latest ghcr.io/amdresearch/auplc-code-gpu:latest-$(GPU_TARGET)

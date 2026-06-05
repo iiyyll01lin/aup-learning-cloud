@@ -3195,6 +3195,115 @@ properties:
               Enable auto-admin creation on first install.
               Credentials will be stored in `jupyterhub-admin-credentials` secret.
 
+      notifications:
+        type: object
+        additionalProperties: false
+        description: |
+          Structured notification configuration for the authenticated Hub top
+          bar and the Home page announcement area. Helm value changes require a
+          Helm upgrade and Hub pod restart before users see updated notices.
+        properties:
+          enabled:
+            type: boolean
+            description: Enable the notification subsystem.
+          topbar: &notification-item-spec
+            type: object
+            additionalProperties: false
+            if:
+              required: [enabled]
+              properties:
+                enabled:
+                  const: true
+            then:
+              required: [id]
+              properties:
+                id:
+                  minLength: 1
+              anyOf:
+                - required: [title]
+                  properties:
+                    title:
+                      minLength: 1
+                - required: [message]
+                  properties:
+                    message:
+                      minLength: 1
+            description: |
+              Single urgent notice for authenticated Hub pages. Disabled by
+              default so no top-bar notice renders unless explicitly enabled.
+              Use stable `id` and optional `version` as operator-facing notice
+              identifiers for future compatibility only.
+            properties:
+              enabled:
+                type: boolean
+                description: Enable this notification item.
+              id:
+                type: string
+                description: Stable notification identifier for operator reference and future compatibility.
+              version:
+                type: string
+                description: Optional version suffix for operator reference and future compatibility without changing the notice id.
+              severity:
+                type: string
+                enum: [info, success, warning, danger]
+                description: Visual severity for the notification.
+              dismissible:
+                type: boolean
+                description: Legacy/future-compatible metadata for the current stateless topbar UI.
+              eyebrow:
+                type: string
+                description: Optional plain-text meta label shown above Home page notification titles.
+              title:
+                type: string
+                description: Short notification title.
+              message:
+                type: string
+                description: Notification body content.
+              format:
+                type: string
+                enum: [text, markdown, html]
+                description: Content format for `title` and `message`; rich text is sanitized by the Hub backend.
+              link:
+                type: object
+                additionalProperties: false
+                description: Optional call-to-action link.
+                properties:
+                  label:
+                    type: string
+                    description: Link text.
+                  url:
+                    type: string
+                    description: Link URL.
+              startsAt:
+                type: string
+                description: Optional ISO-8601 start time string; backend validation handles time semantics.
+              endsAt:
+                type: string
+                description: Optional ISO-8601 end time string; backend validation handles time semantics.
+          homepage:
+            type: object
+            additionalProperties: false
+            description: |
+              Home page announcement configuration. Structured `items` replace
+              the legacy static announcement when active. Homepage items are
+              normalized as active by default when `enabled` is omitted; set
+              `enabled: false` to keep a configured item hidden.
+            properties:
+              enabled:
+                type: boolean
+                description: Enable structured Home page announcements.
+              legacyAnnouncementFallback:
+                type: boolean
+                description: |
+                  Fall back to `hub.extraFiles.announcement.txt` when no
+                  structured Home page notification items are active.
+              items:
+                type: array
+                description: Home page notification items using the topbar item
+                  shape. Homepage items default to active unless explicitly
+                  disabled.
+                items: *notification-item-spec
+
       accelerators:
         type: object
         additionalProperties:

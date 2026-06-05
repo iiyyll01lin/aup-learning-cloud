@@ -69,6 +69,7 @@ class OverlayDefaultSelectionTests(unittest.TestCase):
         _, parsed = _render(_strix_halo_cfg(), courses=CourseSelection.default())
         images = parsed["custom"]["resources"]["images"]
         self.assertEqual(images["gpu"], "ghcr.io/amdresearch/auplc-base:v1.0-gfx1151")
+        self.assertEqual(images["code-gpu"], "ghcr.io/amdresearch/auplc-code-gpu:v1.0-gfx1151")
         self.assertEqual(images["Course-CV"], "ghcr.io/amdresearch/auplc-cv:v1.0-gfx1151")
         self.assertEqual(images["Course-PhySim"], "ghcr.io/amdresearch/auplc-physim:v1.0-gfx1151")
 
@@ -89,11 +90,8 @@ class OverlayBasicSelectionTests(unittest.TestCase):
             courses=CourseSelection(picks=list(COURSE_PRESET_BASIC)),
         )
         mapping = parsed["custom"]["teams"]["mapping"]
-        # The 'gpu' team's full base list is the four GPU courses; with the
-        # basic preset (cpu+gpu) none of those overlap, so it must be empty.
-        self.assertEqual(mapping["gpu"], [])
-        # The 'cpu' team's only base entry IS 'cpu', so it survives.
-        self.assertEqual(mapping["cpu"], ["cpu"])
+        self.assertEqual(mapping["cpu"], ["cpu", "code-cpu"])
+        self.assertEqual(mapping["gpu"], ["code-gpu"])
 
     def test_basic_omits_unselected_resource_images(self) -> None:
         _, parsed = _render(
@@ -101,7 +99,8 @@ class OverlayBasicSelectionTests(unittest.TestCase):
             courses=CourseSelection(picks=list(COURSE_PRESET_BASIC)),
         )
         images = parsed["custom"]["resources"]["images"]
-        self.assertIn("gpu", images)  # 'gpu' is selected via the basic preset
+        self.assertIn("gpu", images)
+        self.assertIn("code-gpu", images)
         self.assertNotIn("Course-CV", images)
         self.assertNotIn("Course-LLM", images)
 
@@ -260,11 +259,20 @@ class TryLoadCoursesFromOverlayTests(unittest.TestCase):
             )
             return try_load_courses_from_overlay(path)
 
-    def test_default_round_trips(self) -> None:
+    def test_env_selection_header_round_trips(self) -> None:
         loaded = self._write_and_read_back(CourseSelection.default())
         self.assertIsNotNone(loaded)
         assert loaded is not None
         self.assertTrue(loaded.is_default())
+
+    def test_legacy_course_selection_header_still_loads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "values.local.yaml"
+            path.write_text("# Course selection : cpu, gpu\ncustom: {}\n", encoding="utf-8")
+            loaded = try_load_courses_from_overlay(path)
+            self.assertIsNotNone(loaded)
+            assert loaded is not None
+            self.assertEqual(loaded.picks, ["cpu", "gpu"])
 
     def test_basic_preset_round_trips(self) -> None:
         original = CourseSelection(picks=list(COURSE_PRESET_BASIC))

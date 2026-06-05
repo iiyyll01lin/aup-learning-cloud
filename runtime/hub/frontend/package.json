@@ -12,6 +12,7 @@
     "build:admin": "pnpm --filter @auplc/admin run build",
     "build:spawn": "pnpm --filter @auplc/spawn run build",
     "build:home": "pnpm --filter @auplc/home run build",
+    "test": "pnpm -r --if-present run test",
     "lint": "pnpm -r run lint",
     "clean": "pnpm -r exec rm -rf dist node_modules"
   },

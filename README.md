@@ -21,7 +21,7 @@ SOFTWARE.
 
 # AUP Learning Cloud
 
-> **✨ New UI is coming!** 🚀 Try it now on [https://www.openhw.io/](https://www.openhw.io/) 👀
+> **✨ New UI is coming!** 🚀 Try it now on [https://tpe.aupcloud.io/](https://tpe.aupcloud.io/) 👀
 
 
 AUP Learning Cloud is a tailored JupyterHub deployment designed to provide an intuitive and hands-on AI learning experience. It features a comprehensive suite of AI toolkits running on AMD hardware acceleration, enabling users to learn and experiment with ease.
