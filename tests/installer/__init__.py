@@ -5,7 +5,7 @@
 
 Run from the repository root with:
 
-    python3 -m unittest discover tests/installer
+    python -m pytest tests/installer
 
 These tests focus on pure-function logic (catalog parsing, overlay emission,
 GPU SKU resolution, manifest round-trip, image-ref normalisation) so they
