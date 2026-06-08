@@ -27,13 +27,20 @@ FROM ${NODE_IMAGE} AS node-runtime
 FROM node-runtime AS hub-link-builder
 
 ARG NPM_REGISTRY=
-WORKDIR /build/auplc-hub-link
+WORKDIR /build/dockerfiles/Code/auplc-hub-link
 
-COPY auplc-hub-link/package.json auplc-hub-link/package-lock.json ./
+COPY dockerfiles/Code/auplc-hub-link/package.json dockerfiles/Code/auplc-hub-link/package-lock.json ./
+COPY runtime/hub/frontend/packages/runtime-status /build/runtime/hub/frontend/packages/runtime-status
+COPY runtime/hub/frontend/tsconfig.base.json /build/runtime/hub/frontend/tsconfig.base.json
+RUN node -e 'const fs = require("fs"); const path = "/build/runtime/hub/frontend/packages/runtime-status/package.json"; const pkg = JSON.parse(fs.readFileSync(path, "utf8")); delete pkg.devDependencies; fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);'
 RUN if [ -n "${NPM_REGISTRY}" ]; then npm config set registry "${NPM_REGISTRY}"; fi && \
-    npm ci
+    npm ci --ignore-scripts --no-audit --no-fund --install-links
+RUN mkdir -p /build/runtime && ln -sfn /build/dockerfiles/Code/auplc-hub-link/node_modules /build/runtime/node_modules
 
-COPY auplc-hub-link/ ./
+COPY dockerfiles/Code/auplc-hub-link/src ./src
+COPY dockerfiles/Code/auplc-hub-link/README.md ./README.md
+COPY dockerfiles/Code/auplc-hub-link/LICENSE ./LICENSE
+COPY dockerfiles/Code/auplc-hub-link/tsconfig.json ./tsconfig.json
 RUN npm run package && \
     test -f auplc-hub-link-0.0.0.vsix
 
@@ -49,8 +56,8 @@ ARG PIXI_DOWNLOAD_URL=
 ARG PIXI_CONDA_FORGE_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
 USER root
 
-COPY packages/code-common-apt.txt /opt/auplc/build/code-common-apt.txt
-COPY scripts/install-code-system-packages.sh scripts/install-node-toolchain.sh scripts/install-pixi-toolchain.sh /usr/local/bin/
+COPY dockerfiles/Code/packages/code-common-apt.txt /opt/auplc/build/code-common-apt.txt
+COPY dockerfiles/Code/scripts/install-code-system-packages.sh dockerfiles/Code/scripts/install-node-toolchain.sh dockerfiles/Code/scripts/install-pixi-toolchain.sh /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/install-code-system-packages.sh /usr/local/bin/install-node-toolchain.sh /usr/local/bin/install-pixi-toolchain.sh && \
     /usr/local/bin/install-code-system-packages.sh /opt/auplc/build/code-common-apt.txt
@@ -70,10 +77,10 @@ ENV NPM_CONFIG_PREFIX=/home/jovyan/.local
 ENV PIXI_HOME=/home/jovyan/.pixi
 ENV PATH=/home/jovyan/.local/bin:/home/jovyan/.pixi/bin:${PATH}
 
-COPY extensions.txt /opt/auplc/extensions/extensions.txt
-COPY extensions/ /opt/auplc/extensions/local/
-COPY --from=hub-link-builder /build/auplc-hub-link/auplc-hub-link-0.0.0.vsix /opt/auplc/extensions/local/auplc-hub-link-0.0.0.vsix
-COPY start-code-server.sh /usr/local/bin/start-code-server.sh
+COPY dockerfiles/Code/extensions.txt /opt/auplc/extensions/extensions.txt
+COPY dockerfiles/Code/extensions/ /opt/auplc/extensions/local/
+COPY --from=hub-link-builder /build/dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix /opt/auplc/extensions/local/auplc-hub-link-0.0.0.vsix
+COPY dockerfiles/Code/start-code-server.sh /usr/local/bin/start-code-server.sh
 
 RUN chmod +x /usr/local/bin/start-code-server.sh && \
     mkdir -p \

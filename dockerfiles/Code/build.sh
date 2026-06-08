@@ -19,13 +19,14 @@ case "${IMAGE_FLAVOR}" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 NODE_IMAGE="${NODE_IMAGE:-docker.io/library/node:22-bookworm-slim}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
 PNPM_VERSION="${PNPM_VERSION:-10.27.0}"
 CODE_GLOBAL_NPM_PACKAGES="${CODE_GLOBAL_NPM_PACKAGES:-typescript tsx vite eslint prettier}"
 
 docker build \
-  -f "${SCRIPT_DIR}/Dockerfile" \
+  -f "${ROOT_DIR}/dockerfiles/Code/Dockerfile" \
   --build-arg "NODE_IMAGE=${NODE_IMAGE}" \
   --build-arg "BASE_IMAGE=${BASE_IMAGE}" \
   --build-arg "IMAGE_FLAVOR=${IMAGE_FLAVOR}" \
@@ -33,4 +34,4 @@ docker build \
   --build-arg "PNPM_VERSION=${PNPM_VERSION}" \
   --build-arg "CODE_GLOBAL_NPM_PACKAGES=${CODE_GLOBAL_NPM_PACKAGES}" \
   -t "${IMAGE_TAG}" \
-  "${SCRIPT_DIR}"
+  "${ROOT_DIR}"
