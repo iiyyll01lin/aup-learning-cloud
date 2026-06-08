@@ -589,6 +589,26 @@ class RemoteLabKubeSpawner(KubeSpawner):
             return self.quota_rates.get("cpu", 1)
         return self.quota_rates.get(accelerator_type, self.quota_rates.get("cpu", 1))
 
+    @staticmethod
+    def _build_runtime_metadata_env(
+        *,
+        start_time: int,
+        runtime_minutes: int,
+        quota_rate: int,
+        runtime_unlimited: bool,
+    ) -> dict[str, str]:
+        env = {
+            "JOB_START_TIME": str(start_time),
+            "QUOTA_RATE": str(quota_rate),
+        }
+
+        if runtime_unlimited:
+            env["AUPLC_RUNTIME_UNLIMITED"] = "true"
+        else:
+            env["JOB_RUN_TIME"] = str(runtime_minutes)
+
+        return env
+
     def _get_launch_mode(self, resource_type: str) -> str:
         """Return the configured launch mode for a resource."""
         resource_metadata = self._hub_config.get_resource_metadata(resource_type) if self._hub_config else None
@@ -818,14 +838,16 @@ class RemoteLabKubeSpawner(KubeSpawner):
         # Calculate quota rate for this accelerator type
         quota_rate = self.get_quota_rate(accelerator_type) if self.quota_enabled else 0
 
-        # Set environment variables for jupyterlab-server-timer extension
-        timer_runtime = runtime_minutes if not self.single_node_mode else 4320  # 3 days
+        # Set environment variables for runtime display extensions.
+        for key in ("JOB_START_TIME", "JOB_RUN_TIME", "QUOTA_RATE", "AUPLC_RUNTIME_UNLIMITED"):
+            self.environment.pop(key, None)
         self.environment.update(
-            {
-                "JOB_START_TIME": str(start_time),
-                "JOB_RUN_TIME": str(timer_runtime),
-                "QUOTA_RATE": str(quota_rate),
-            }
+            self._build_runtime_metadata_env(
+                start_time=start_time,
+                runtime_minutes=runtime_minutes,
+                quota_rate=quota_rate,
+                runtime_unlimited=self.single_node_mode,
+            )
         )
 
         launches_code_server = self._launches_code_server(resource_type)
