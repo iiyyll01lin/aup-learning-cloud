@@ -214,7 +214,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
@@ -312,7 +312,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
@@ -378,7 +378,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
@@ -478,7 +478,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -590,7 +590,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve GPU config
         id: suffix
@@ -727,7 +727,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare build context
         run: cp -r projects/${{ matrix.course }} dockerfiles/Courses/${{ matrix.course }}/course_data
