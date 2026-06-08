@@ -3,6 +3,7 @@
 
 packages:
   - "packages/*"
+  - "!packages/*/auplc_jupyterlab_runtime_status/labextension"
   - "apps/*"
 
 catalog:

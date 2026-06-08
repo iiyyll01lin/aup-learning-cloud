@@ -25,6 +25,8 @@
     "composite": true,
 
     "paths": {
+      "@auplc/runtime-status": ["./packages/runtime-status/src"],
+      "@auplc/runtime-status/*": ["./packages/runtime-status/src/*"],
       "@auplc/shared": ["./packages/shared/src"],
       "@auplc/shared/*": ["./packages/shared/src/*"]
     }
