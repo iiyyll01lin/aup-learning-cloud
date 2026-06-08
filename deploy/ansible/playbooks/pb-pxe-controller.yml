@@ -63,6 +63,11 @@
     #   - "ssh-ed25519 AAAA... you@workstation"
     #   - "ssh-rsa AAAA... ci@runner"
 
+    # Apache HTTP port for serving the k3s token / kubeconfig to PXE agents.
+    # Defaults to 8080 (not 80) so the PXE controller can live on a k3s node
+    # without clashing with k3s Traefik / ServiceLB, which owns host port 80/443.
+    pxe_web_port: 8080
+
     # APT Mirror
     pxe_apt_mirror: "http://tw.archive.ubuntu.com/ubuntu"
 
