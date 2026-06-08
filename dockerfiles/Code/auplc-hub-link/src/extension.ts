@@ -18,16 +18,17 @@
 // SOFTWARE.
 
 import * as vscode from "vscode";
+import {
+  DEFAULT_RUNTIME_STATUS_SETTINGS,
+  getRuntimeStatusText,
+  parseRuntimeMetadata,
+  shouldShowRuntimeStatus,
+} from "@auplc/runtime-status";
 
 const COMMAND_ID = "auplc.backToHub";
 const STATUS_BAR_TEXT = "$(home) JupyterHub";
-const RUNTIME_STATUS_BAR_TEXT_PREFIX = "$(clock) Runtime:";
-const RUNTIME_STATUS_BAR_UPDATE_INTERVAL_MS = 1000;
-
-export interface RuntimeMetadata {
-  startTimeSeconds: number;
-  runTimeMinutes: number;
-}
+const RUNTIME_STATUS_BAR_TEXT_PREFIX = "$(clock)";
+const RUNTIME_STATUS_BAR_UPDATE_INTERVAL_MS = DEFAULT_RUNTIME_STATUS_SETTINGS.updateIntervalMs;
 
 function getHubUrl(): string {
   return process.env.AUPLC_HUB_URL?.trim() || "/hub/home";
@@ -61,50 +62,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function parseFiniteNumber(value: string | undefined): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsedValue = Number(value.trim());
-  return Number.isFinite(parsedValue) ? parsedValue : undefined;
-}
-
-export function getRuntimeMetadata(env: NodeJS.ProcessEnv = process.env): RuntimeMetadata | undefined {
-  const startTimeSeconds = parseFiniteNumber(env.JOB_START_TIME);
-  const runTimeMinutes = parseFiniteNumber(env.JOB_RUN_TIME);
-
-  if (startTimeSeconds === undefined || startTimeSeconds <= 0 || runTimeMinutes === undefined || runTimeMinutes <= 0) {
-    return undefined;
-  }
-
-  return {
-    startTimeSeconds,
-    runTimeMinutes,
-  };
-}
-
-export function calculateRuntimeRemainingSeconds(metadata: RuntimeMetadata, nowSeconds: number): number {
-  const totalSeconds = metadata.runTimeMinutes * 60;
-  const elapsedSeconds = nowSeconds - metadata.startTimeSeconds;
-  return Math.max(0, Math.floor(totalSeconds - elapsedSeconds));
-}
-
-export function formatRuntimeRemaining(remainingSeconds: number): string {
-  const totalSeconds = Math.max(0, Math.floor(remainingSeconds));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
-}
-
-export function getRuntimeStatusBarText(metadata: RuntimeMetadata, now: number = Date.now()): string {
-  const nowSeconds = Math.floor(now / 1000);
-  const remainingSeconds = calculateRuntimeRemainingSeconds(metadata, nowSeconds);
-  return `${RUNTIME_STATUS_BAR_TEXT_PREFIX} ${formatRuntimeRemaining(remainingSeconds)}`;
-}
-
 async function openHub(): Promise<void> {
   const hubUrl = getHubUrl();
   const hubUri = getAbsoluteHttpUri(hubUrl);
@@ -122,14 +79,15 @@ function handleOpenHubError(error: unknown): void {
 }
 
 function createRuntimeStatusBarItem(context: vscode.ExtensionContext): void {
-  const metadata = getRuntimeMetadata();
-  if (!metadata) {
+  const metadata = parseRuntimeMetadata(process.env);
+  if (!shouldShowRuntimeStatus(metadata)) {
     return;
   }
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
   const updateStatusBarItem = () => {
-    statusBarItem.text = getRuntimeStatusBarText(metadata);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    statusBarItem.text = `${RUNTIME_STATUS_BAR_TEXT_PREFIX} ${getRuntimeStatusText(metadata, nowSeconds)}`;
   };
 
   updateStatusBarItem();

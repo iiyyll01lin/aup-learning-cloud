@@ -29,9 +29,13 @@
     ]
   },
   "scripts": {
+    "precompile": "node_modules/.bin/tsc -p ../../../runtime/hub/frontend/packages/runtime-status/tsconfig.esm.json && node_modules/.bin/tsc -p ../../../runtime/hub/frontend/packages/runtime-status/tsconfig.cjs.json && node_modules/.bin/tsc -p ../../../runtime/hub/frontend/packages/runtime-status/tsconfig.types.json && node ../../../runtime/hub/frontend/packages/runtime-status/scripts/write-package-types.mjs",
     "compile": "tsc -p .",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@auplc/runtime-status": "file:../../../runtime/hub/frontend/packages/runtime-status"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
