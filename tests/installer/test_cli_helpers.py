@@ -13,7 +13,6 @@ was passed.
 from __future__ import annotations
 
 import tempfile
-import unittest
 from pathlib import Path
 
 from auplc_installer.catalog import (
@@ -46,45 +45,43 @@ def _write_overlay(path: Path, courses: CourseSelection) -> None:
     )
 
 
-class PreserveCoursesForUpgradeTests(unittest.TestCase):
-    def test_default_courses_inherits_previous_basic(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            overlay = Path(tmp) / "values.local.yaml"
-            _write_overlay(overlay, CourseSelection(picks=list(COURSE_PRESET_BASIC)))
+def test_default_courses_inherits_previous_basic() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        overlay = Path(tmp) / "values.local.yaml"
+        _write_overlay(overlay, CourseSelection(picks=list(COURSE_PRESET_BASIC)))
 
-            state = _make_state_with_courses(CourseSelection.default())
-            _preserve_courses_for_upgrade(state, overlay)
-            self.assertEqual(state.courses.picks, list(COURSE_PRESET_BASIC))
-
-    def test_default_courses_inherits_previous_none_sentinel(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            overlay = Path(tmp) / "values.local.yaml"
-            _write_overlay(overlay, CourseSelection(picks=[NONE_SENTINEL]))
-
-            state = _make_state_with_courses(CourseSelection.default())
-            _preserve_courses_for_upgrade(state, overlay)
-            self.assertTrue(state.courses.is_none())
-
-    def test_explicit_selection_is_not_overwritten(self) -> None:
-        """User-passed --courses=basic must beat whatever the file says."""
-        with tempfile.TemporaryDirectory() as tmp:
-            overlay = Path(tmp) / "values.local.yaml"
-            _write_overlay(overlay, CourseSelection(picks=["cpu"]))
-
-            explicit = CourseSelection(picks=list(COURSE_PRESET_BASIC))
-            state = _make_state_with_courses(explicit)
-            _preserve_courses_for_upgrade(state, overlay)
-            self.assertEqual(state.courses.picks, list(COURSE_PRESET_BASIC))
-
-    def test_missing_overlay_keeps_default(self) -> None:
-        """No prior overlay => upgrade falls back to the historical 'all' default."""
-        with tempfile.TemporaryDirectory() as tmp:
-            overlay = Path(tmp) / "values.local.yaml"  # never created
-
-            state = _make_state_with_courses(CourseSelection.default())
-            _preserve_courses_for_upgrade(state, overlay)
-            self.assertTrue(state.courses.is_default())
+        state = _make_state_with_courses(CourseSelection.default())
+        _preserve_courses_for_upgrade(state, overlay)
+        assert state.courses.picks == list(COURSE_PRESET_BASIC)
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_default_courses_inherits_previous_none_sentinel() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        overlay = Path(tmp) / "values.local.yaml"
+        _write_overlay(overlay, CourseSelection(picks=[NONE_SENTINEL]))
+
+        state = _make_state_with_courses(CourseSelection.default())
+        _preserve_courses_for_upgrade(state, overlay)
+        assert state.courses.is_none()
+
+
+def test_explicit_selection_is_not_overwritten() -> None:
+    """User-passed --courses=basic must beat whatever the file says."""
+    with tempfile.TemporaryDirectory() as tmp:
+        overlay = Path(tmp) / "values.local.yaml"
+        _write_overlay(overlay, CourseSelection(picks=["cpu"]))
+
+        explicit = CourseSelection(picks=list(COURSE_PRESET_BASIC))
+        state = _make_state_with_courses(explicit)
+        _preserve_courses_for_upgrade(state, overlay)
+        assert state.courses.picks == list(COURSE_PRESET_BASIC)
+
+
+def test_missing_overlay_keeps_default() -> None:
+    """No prior overlay => upgrade falls back to the historical 'all' default."""
+    with tempfile.TemporaryDirectory() as tmp:
+        overlay = Path(tmp) / "values.local.yaml"  # never created
+
+        state = _make_state_with_courses(CourseSelection.default())
+        _preserve_courses_for_upgrade(state, overlay)
+        assert state.courses.is_default()
