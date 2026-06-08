@@ -93,6 +93,13 @@ pxe_nfs_root: "/srv/nfs/rootfs"
 pxe_tftp_root: "/srv/tftp"
 pxe_web_root: "/var/www/html"
 
+# TCP port Apache listens on to serve the k3s token / kubeconfig to PXE agents.
+# This is an internal-only endpoint (reachable from the node subnet), so the port
+# number is arbitrary. It defaults to 8080 -- NOT 80 -- so the PXE controller can
+# be co-located on a k3s node without colliding with k3s Traefik / ServiceLB,
+# which binds host port 80 (and 443) for cluster ingress.
+pxe_web_port: 8080
+
 # ============================================================
 # Rootfs build settings
 # ============================================================

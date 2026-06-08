@@ -3,8 +3,8 @@ set -euo pipefail
 
 PXE_SERVER="{{ pxe_controller_ip }}"
 K3S_SERVERS="{{ pxe_k3s_server_ips | join(' ') }}"
-TOKEN_URL="http://${PXE_SERVER}/k3s/token"
-KUBECONFIG_URL="http://${PXE_SERVER}/k3s/kubeconfig"
+TOKEN_URL="http://${PXE_SERVER}:{{ pxe_web_port }}/k3s/token"
+KUBECONFIG_URL="http://${PXE_SERVER}:{{ pxe_web_port }}/k3s/kubeconfig"
 K3S_DATA="{{ pxe_k3s_data_dir }}"
 
 HOSTNAME=$(hostname)

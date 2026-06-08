@@ -431,11 +431,45 @@
   changed_when: "'Enabling' in _a2enconf.stdout"
   notify: Restart apache2
 
+# Apache serves the token/kubeconfig on pxe_web_port (default 8080) instead of
+# 80 so the PXE controller can be co-located on a k3s node without colliding with
+# k3s Traefik / ServiceLB, which owns host port 80/443.
+- name: Configure Apache listen port
+  ansible.builtin.template:
+    src: apache-ports.conf.j2
+    dest: /etc/apache2/ports.conf
+    mode: "0644"
+  notify: Restart apache2
+
+- name: Deploy PXE HTTP virtual host
+  ansible.builtin.template:
+    src: pxe-http-vhost.conf.j2
+    dest: /etc/apache2/sites-available/pxe-http.conf
+    mode: "0644"
+  notify: Restart apache2
+
+- name: Enable PXE HTTP virtual host
+  ansible.builtin.command:
+    cmd: a2ensite pxe-http
+  register: _a2ensite
+  changed_when: "'Enabling' in _a2ensite.stdout"
+  notify: Restart apache2
+
+- name: Disable default Apache site (frees host port 80)
+  ansible.builtin.command:
+    cmd: a2dissite 000-default
+  register: _a2dissite
+  changed_when: "'Disabling' in _a2dissite.stdout"
+  notify: Restart apache2
+
 - name: Enable and start Apache
   ansible.builtin.systemd:
     name: apache2
     state: started
     enabled: true
+
+- name: Flush handlers for Apache
+  ansible.builtin.meta: flush_handlers
 
 # ==========================================================
 # 12. Verify PXE server status
@@ -491,7 +525,7 @@
 
 - name: Check HTTP token endpoint is reachable
   ansible.builtin.uri:
-    url: "http://127.0.0.1/k3s/"
+    url: "http://127.0.0.1:{{ pxe_web_port }}/k3s/"
     status_code: [200, 403]
   register: _verify_http
 
@@ -503,7 +537,7 @@
       ══════════════════════════════════════════
        dnsmasq  : Proxy DHCP + TFTP on {{ pxe_network_interface }}
        NFS      : {{ pxe_nfs_root }} → {{ pxe_subnet }}
-       Apache   : http://{{ pxe_controller_ip }}/k3s/
+       Apache   : http://{{ pxe_controller_ip }}:{{ pxe_web_port }}/k3s/
        Kernel   : {{ pxe_kernel_version | default('unknown') }}
       ──────────────────────────────────────────
        Next steps (see the Multi-AIPC PXE deployment guide):
