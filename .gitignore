@@ -389,9 +389,8 @@ vite.config.ts.timestamp-*
 dockerfiles/Courses/DL/data/FashionMNIST/raw/
 *.vsix
 
-# Local config overrides (any file containing 'local')
-*local*
-*.local.*
+# Local config overrides
+runtime/values.local.yaml
 
 # Offline bundle artifacts
 auplc-bundle-*/
