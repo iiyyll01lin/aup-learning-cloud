@@ -138,7 +138,9 @@ def setup_hub(c: Any) -> None:
                     spawner.user.db,
                 )
                 if not synced:
-                    print(f"[GROUPS] GitHub team sync unavailable for {spawner.user.name}; keeping existing team groups")
+                    print(
+                        f"[GROUPS] GitHub team sync unavailable for {spawner.user.name}; keeping existing team groups"
+                    )
             except Exception as e:
                 print(f"[GROUPS] Warning: Failed to sync GitHub teams for {spawner.user.name}: {e}")
 
