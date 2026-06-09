@@ -53,30 +53,39 @@ def _github_team_sync_ttl() -> int:
     return 3600
 
 
-async def fetch_github_teams(access_token: str, org_name: str) -> list[str] | None:
-    """Fetch the user's GitHub team slugs for the given organization."""
-    if not access_token or not org_name:
+async def fetch_github_teams(
+    access_token: str,
+    github_username: str,
+    org_name: str,
+    candidate_team_slugs: set[str],
+) -> list[str] | None:
+    """Fetch mapped team slugs for a GitHub user using the configured platform token."""
+    if not access_token or not github_username or not org_name or not candidate_team_slugs:
         return []
 
     headers = {
-        "Authorization": f"token {access_token}",
+        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.github.v3+json",
     }
 
     teams: list[str] = []
     try:
-        async with (
-            aiohttp.ClientSession() as session,
-            session.get("https://api.github.com/user/teams", headers=headers) as resp,
-        ):
-            if resp.status == 200:
-                data = await resp.json()
-                for team in data:
-                    if team["organization"]["login"] == org_name:
-                        teams.append(team["slug"])
-            else:
-                log.warning("GitHub API returned status %d when fetching teams", resp.status)
-                return None
+        async with aiohttp.ClientSession() as session:
+            for team_slug in sorted(candidate_team_slugs):
+                url = f"https://api.github.com/orgs/{org_name}/teams/{team_slug}/memberships/{github_username}"
+                async with session.get(url, headers=headers) as resp:
+                    if resp.status == 200:
+                        teams.append(team_slug)
+                    elif resp.status == 404:
+                        continue
+                    else:
+                        log.warning(
+                            "GitHub API returned status %d when checking team %s for user %s",
+                            resp.status,
+                            team_slug,
+                            github_username,
+                        )
+                        return None
     except Exception as e:
         log.warning("Error fetching GitHub teams: %s", e)
         return None
@@ -91,11 +100,11 @@ async def sync_github_teams_for_user(
     valid_mapping_keys: set[str],
     db: Session,
 ) -> bool:
-    """Sync one GitHub user's teams with throttling and per-user locking.
+    """Sync one GitHub user's teams with the configured platform token.
 
     The throttle and per-user lock live here so every caller shares the same
-    protection. Concurrent spawns for the same user coalesce into one GitHub
-    `/user/teams` call within the TTL window.
+    protection. Concurrent spawns for the same user coalesce into one set of
+    GitHub team membership checks within the TTL window.
     """
     if not user.name.startswith("github:") or not access_token:
         return False
@@ -108,7 +117,8 @@ async def sync_github_teams_for_user(
         if cached and now - cached[0] < ttl:
             team_slugs = cached[1]
         else:
-            team_slugs = await fetch_github_teams(access_token, org_name)
+            github_username = user.name.split(":", 1)[1]
+            team_slugs = await fetch_github_teams(access_token, github_username, org_name, valid_mapping_keys)
             if team_slugs is None:
                 return False
             _GITHUB_TEAM_SYNC_CACHE[user.name] = (now, team_slugs)

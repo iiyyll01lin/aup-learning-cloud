@@ -129,9 +129,10 @@ def setup_hub(c: Any) -> None:
             try:
                 from core.groups import sync_github_teams_for_user
 
+                platform_github_token = config.git_clone.defaultAccessToken
                 synced = await sync_github_teams_for_user(
                     spawner.user,
-                    auth_state.get("access_token", ""),
+                    platform_github_token,
                     config.github_org_name,
                     set(config.teams.mapping.keys()),
                     spawner.user.db,
