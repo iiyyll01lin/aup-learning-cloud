@@ -111,7 +111,7 @@ custom:
   #      - Webhook: off
   #   2. Update hub.config.GitHubOAuthenticator:
   #        app_id: "<GitHub App App ID>"
-  #        installation_id: "<GitHub App Installation ID>"
+  #        installation_id: "<GitHub App Installation ID>"  # Optional; leave blank to auto-discover from the org installation
   #        private_key_file: "<Mounted GitHub App private key path>"
   #        client_id: "<GitHub App Client ID>"
   #        client_secret: "<GitHub App Client Secret>"
@@ -376,6 +376,7 @@ hub:
     GitHubOAuthenticator:
       oauth_callback_url: "https://your.domain.com/hub/github/oauth_callback"
       app_id: ""
+      # Optional; leave blank when the GitHub App is installed on the org and the Hub can auto-discover it.
       installation_id: ""
       private_key_file: ""
       private_key: ""
