@@ -1548,12 +1548,11 @@ class GroupSyncAPIHandler(APIHandler):
         if not self.current_user.admin:
             raise web.HTTPError(403, "Admin access required")
 
-        from core.config import HubConfig
+        from core import z2jh
         from core.groups import fetch_github_team_members_table, sync_user_github_teams
 
-        config = HubConfig.get()
         github_org = _handler_config.get("github_org", "")
-        platform_github_token = config.git_clone.defaultAccessToken
+        platform_github_token = z2jh.get_config("hub.config.GitHubOAuthenticator.client_secret", "")
         if not github_org:
             raise web.HTTPError(400, "No GitHub organization configured")
         if not platform_github_token:
