@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # One-click setup + demo bootstrap for AUP Learning Cloud on a Strix Halo (gfx1151) Ubuntu box.
+#
+# Env flags: ADMIN=1 (default) grants the auto-login user 'student' JupyterHub admin rights
+#            (so http://localhost:30890/hub/admin works); set ADMIN=0 to opt out.
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/AMDResearch/aup-learning-cloud.git}"
 IMAGE_TAG="${IMAGE_TAG:-develop}"
+ADMIN="${ADMIN:-1}"
 OEM_KERNEL_PKG="${OEM_KERNEL_PKG:-linux-image-6.14.0-1018-oem}"
 STATE_DIR="/var/lib/auplc-demo"
 STATE_FILE="$STATE_DIR/state"
@@ -11,7 +15,7 @@ LOG="/var/log/auplc-demo-setup.log"
 RESUME_UNIT="auplc-demo-resume.service"
 
 # --- escalate to root (keeps SUDO_USER so kubeconfig lands in the real user's home) ---
-if [ "$(id -u)" -ne 0 ]; then exec sudo -E bash "$0" "$@"; fi
+if [ "$(id -u)" -ne 0 ]; then exec sudo -E IMAGE_TAG="$IMAGE_TAG" ADMIN="$ADMIN" OEM_KERNEL_PKG="$OEM_KERNEL_PKG" REPO_URL="$REPO_URL" bash "$0" "$@"; fi
 
 SELF="$(readlink -f "$0")"
 REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || echo root)}"
@@ -67,6 +71,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 Environment=IMAGE_TAG=$IMAGE_TAG
+Environment=ADMIN=$ADMIN
 ExecStart=/usr/bin/env SUDO_USER=$REAL_USER /bin/bash $SELF --resume
 EOF
     systemctl daemon-reload
@@ -84,9 +89,32 @@ cd "$REPO_DIR"
 # -v gives linear logs (nicer under systemd/journald than the progress-bar UI)
 ./auplc-installer install -y --image-tag="$IMAGE_TAG" -v
 
+if [ "$ADMIN" = "1" ]; then
+  echo "ADMIN=1: granting 'student' JupyterHub admin (helm upgrade)..."
+  ADMIN_VALUES="$STATE_DIR/admin.yaml"
+  cat > "$ADMIN_VALUES" <<'YAML'
+hub:
+  config:
+    Authenticator:
+      admin_users:
+        - student
+YAML
+  export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
+  HELM_ARGS=( -f "$REPO_DIR/runtime/values.yaml" )
+  [ -f "$REPO_DIR/runtime/values.local.yaml" ] && HELM_ARGS+=( -f "$REPO_DIR/runtime/values.local.yaml" )
+  HELM_ARGS+=( -f "$ADMIN_VALUES" )
+  if helm upgrade jupyterhub "$REPO_DIR/runtime/chart" --namespace jupyterhub "${HELM_ARGS[@]}"; then
+    kubectl -n jupyterhub rollout status deployment/hub --timeout=300s || true
+    echo "Admin UI enabled for 'student'."
+  else
+    echo "WARN: admin helm upgrade failed; demo still works, but /hub/admin will be 403 for 'student'."
+  fi
+fi
+
 systemctl disable "$RESUME_UNIT" 2>/dev/null || true
 rm -f "/etc/systemd/system/$RESUME_UNIT"; systemctl daemon-reload 2>/dev/null || true
 rm -f "$STATE_FILE"
 echo ""
 echo "DONE. Open the demo in a browser:  http://localhost:30890  (auto-login as 'student')"
 echo "Remote: http://<this-host-ip>:30890   |  Admin: http://localhost:30890/hub/admin"
+[ "$ADMIN" = "1" ] && echo "Admin UI:  http://localhost:30890/hub/admin   (you are 'student', now an admin)"
