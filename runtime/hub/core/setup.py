@@ -63,6 +63,7 @@ def setup_hub(c: Any) -> None:
     Args:
         c: JupyterHub configuration object (from get_config())
     """
+    from core import z2jh
     from core.authenticators import (
         CustomFirstUseAuthenticator,
         CustomGitHubOAuthenticator,
@@ -129,7 +130,7 @@ def setup_hub(c: Any) -> None:
             try:
                 from core.groups import sync_github_teams_for_user
 
-                platform_github_token = config.git_clone.defaultAccessToken
+                platform_github_token = z2jh.get_config("hub.config.GitHubOAuthenticator.client_secret", "")
                 synced = await sync_github_teams_for_user(
                     spawner.user,
                     platform_github_token,
@@ -257,8 +258,6 @@ def setup_hub(c: Any) -> None:
     # =========================================================================
     # Determine Database URL
     # =========================================================================
-
-    from core import z2jh
 
     db_type = z2jh.get_config("hub.db.type", "sqlite-pvc")
     if db_type == "sqlite-pvc":
