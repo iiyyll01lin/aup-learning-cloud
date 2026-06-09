@@ -28,7 +28,11 @@ Provides functions for:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
+import time
+from contextlib import suppress
 
 import aiohttp
 from jupyterhub.orm import Group as ORMGroup
@@ -39,19 +43,21 @@ log = logging.getLogger("jupyterhub.groups")
 
 GITHUB_TEAM_SOURCE = "github-team"
 SYSTEM_SOURCE = "system"
+_GITHUB_TEAM_SYNC_CACHE: dict[str, tuple[float, list[str]]] = {}
+_GITHUB_TEAM_SYNC_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _github_team_sync_ttl() -> int:
+    with suppress(ValueError):
+        return max(0, int(os.getenv("GITHUB_TEAM_SYNC_TTL_SECONDS", "3600")))
+    return 3600
 
 
 async def fetch_github_teams(access_token: str, org_name: str) -> list[str] | None:
-    """Fetch the user's GitHub team slugs for the given organization.
+    """Fetch the user's GitHub team slugs for the given organization."""
+    if not access_token or not org_name:
+        return []
 
-    Args:
-        access_token: GitHub OAuth access token.
-        org_name: GitHub organization name to filter teams by.
-
-    Returns:
-        List of team slugs the user belongs to in the organization, or ``None``
-        if the GitHub API request failed and membership is unknown.
-    """
     headers = {
         "Authorization": f"token {access_token}",
         "Accept": "application/vnd.github.v3+json",
@@ -76,6 +82,39 @@ async def fetch_github_teams(access_token: str, org_name: str) -> list[str] | No
         return None
 
     return teams
+
+
+async def sync_github_teams_for_user(
+    user: JupyterHubUser,
+    access_token: str,
+    org_name: str,
+    valid_mapping_keys: set[str],
+    db: Session,
+) -> bool:
+    """Sync one GitHub user's teams with throttling and per-user locking.
+
+    The throttle and per-user lock live here so every caller shares the same
+    protection. Concurrent spawns for the same user coalesce into one GitHub
+    `/user/teams` call within the TTL window.
+    """
+    if not user.name.startswith("github:") or not access_token:
+        return False
+
+    lock = _GITHUB_TEAM_SYNC_LOCKS.setdefault(user.name, asyncio.Lock())
+    async with lock:
+        now = time.time()
+        ttl = _github_team_sync_ttl()
+        cached = _GITHUB_TEAM_SYNC_CACHE.get(user.name)
+        if cached and now - cached[0] < ttl:
+            team_slugs = cached[1]
+        else:
+            team_slugs = await fetch_github_teams(access_token, org_name)
+            if team_slugs is None:
+                return False
+            _GITHUB_TEAM_SYNC_CACHE[user.name] = (now, team_slugs)
+
+        sync_user_github_teams(user, team_slugs, valid_mapping_keys, db)
+        return True
 
 
 def sync_user_github_teams(
