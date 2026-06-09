@@ -43,8 +43,11 @@ log = logging.getLogger("jupyterhub.groups")
 
 GITHUB_TEAM_SOURCE = "github-team"
 SYSTEM_SOURCE = "system"
+SYSTEM_GROUP_NAMES = {"github-users", "native-users"}
 _GITHUB_TEAM_SYNC_CACHE: dict[str, tuple[float, list[str]]] = {}
 _GITHUB_TEAM_SYNC_LOCKS: dict[str, asyncio.Lock] = {}
+_GITHUB_TEAM_MEMBERS_CACHE: dict[tuple[str, tuple[str, ...]], tuple[float, dict[str, list[str]]]] = {}
+_GITHUB_TEAM_MEMBERS_LOCK = asyncio.Lock()
 
 
 def _github_team_sync_ttl() -> int:
@@ -53,44 +56,80 @@ def _github_team_sync_ttl() -> int:
     return 3600
 
 
-async def fetch_github_teams(
-    access_token: str,
-    github_username: str,
-    org_name: str,
-    candidate_team_slugs: set[str],
-) -> list[str] | None:
-    """Fetch mapped team slugs for a GitHub user using the configured platform token."""
-    if not access_token or not github_username or not org_name or not candidate_team_slugs:
-        return []
+async def fetch_github_team_members(access_token: str, org_name: str, team_slug: str) -> set[str] | None:
+    """Fetch all GitHub usernames in one team using the configured platform token."""
+    if not access_token or not org_name or not team_slug:
+        return set()
 
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.github.v3+json",
     }
 
-    teams: list[str] = []
+    members: set[str] = set()
+    page = 1
     try:
         async with aiohttp.ClientSession() as session:
-            for team_slug in sorted(candidate_team_slugs):
-                url = f"https://api.github.com/orgs/{org_name}/teams/{team_slug}/memberships/{github_username}"
+            while True:
+                url = f"https://api.github.com/orgs/{org_name}/teams/{team_slug}/members?per_page=100&page={page}"
                 async with session.get(url, headers=headers) as resp:
-                    if resp.status == 200:
-                        teams.append(team_slug)
-                    elif resp.status == 404:
-                        continue
-                    else:
+                    if resp.status != 200:
                         log.warning(
-                            "GitHub API returned status %d when checking team %s for user %s",
-                            resp.status,
-                            team_slug,
-                            github_username,
+                            "GitHub API returned status %d when fetching members for team %s", resp.status, team_slug
                         )
                         return None
+                    data = await resp.json()
+
+                for member in data:
+                    login = member.get("login")
+                    if isinstance(login, str) and login:
+                        members.add(login.lower())
+
+                if len(data) < 100:
+                    break
+                page += 1
     except Exception as e:
-        log.warning("Error fetching GitHub teams: %s", e)
+        log.warning("Error fetching GitHub team members for %s: %s", team_slug, e)
         return None
 
-    return teams
+    return members
+
+
+async def fetch_github_team_members_table(
+    access_token: str,
+    org_name: str,
+    team_slugs: set[str],
+    *,
+    force: bool = False,
+) -> dict[str, list[str]] | None:
+    """Fetch a login -> team-slugs table using one GitHub request sequence per team."""
+    github_team_keys = sorted(team_slugs - SYSTEM_GROUP_NAMES)
+    if not access_token or not org_name or not github_team_keys:
+        return {}
+
+    cache_key = (org_name, tuple(github_team_keys))
+    now = time.time()
+    ttl = _github_team_sync_ttl()
+    cached = _GITHUB_TEAM_MEMBERS_CACHE.get(cache_key)
+    if not force and cached and now - cached[0] < ttl:
+        return {login: list(teams) for login, teams in cached[1].items()}
+
+    async with _GITHUB_TEAM_MEMBERS_LOCK:
+        now = time.time()
+        cached = _GITHUB_TEAM_MEMBERS_CACHE.get(cache_key)
+        if not force and cached and now - cached[0] < ttl:
+            return {login: list(teams) for login, teams in cached[1].items()}
+
+        teams_by_login: dict[str, list[str]] = {}
+        for team_slug in github_team_keys:
+            members = await fetch_github_team_members(access_token, org_name, team_slug)
+            if members is None:
+                return None
+            for login in members:
+                teams_by_login.setdefault(login, []).append(team_slug)
+
+        _GITHUB_TEAM_MEMBERS_CACHE[cache_key] = (now, teams_by_login)
+        return {login: list(teams) for login, teams in teams_by_login.items()}
 
 
 async def sync_github_teams_for_user(
@@ -99,6 +138,8 @@ async def sync_github_teams_for_user(
     org_name: str,
     valid_mapping_keys: set[str],
     db: Session,
+    *,
+    force: bool = False,
 ) -> bool:
     """Sync one GitHub user's teams with the configured platform token.
 
@@ -114,13 +155,19 @@ async def sync_github_teams_for_user(
         now = time.time()
         ttl = _github_team_sync_ttl()
         cached = _GITHUB_TEAM_SYNC_CACHE.get(user.name)
-        if cached and now - cached[0] < ttl:
+        if not force and cached and now - cached[0] < ttl:
             team_slugs = cached[1]
         else:
             github_username = user.name.split(":", 1)[1]
-            team_slugs = await fetch_github_teams(access_token, github_username, org_name, valid_mapping_keys)
-            if team_slugs is None:
+            teams_by_login = await fetch_github_team_members_table(
+                access_token,
+                org_name,
+                valid_mapping_keys,
+                force=force,
+            )
+            if teams_by_login is None:
                 return False
+            team_slugs = teams_by_login.get(github_username.lower(), [])
             _GITHUB_TEAM_SYNC_CACHE[user.name] = (now, team_slugs)
 
         sync_user_github_teams(user, team_slugs, valid_mapping_keys, db)

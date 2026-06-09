@@ -1540,12 +1540,7 @@ class GroupMembersAPIHandler(APIHandler):
 
 
 class GroupSyncAPIHandler(APIHandler):
-    """Admin API handler for GitHub team sync status.
-
-    Bulk GitHub team sync is intentionally disabled. The previous behavior
-    decrypted auth_state and called GitHub once for every GitHub user, which can
-    amplify auth_state key problems and trigger GitHub secondary rate limits.
-    """
+    """Admin API handler to sync GitHub team groups using the platform token."""
 
     @web.authenticated
     async def post(self):
@@ -1553,22 +1548,47 @@ class GroupSyncAPIHandler(APIHandler):
         if not self.current_user.admin:
             raise web.HTTPError(403, "Admin access required")
 
-        github_users = sum(1 for user in self.users.values() if user.name.startswith("github:"))
-        self.set_status(409)
-        self.set_header("Content-Type", "application/json")
-        self.write(
-            json.dumps(
-                {
-                    "synced": 0,
-                    "failed": 0,
-                    "skipped": github_users,
-                    "error": (
-                        "Bulk GitHub team sync is disabled to avoid auth_state scans and GitHub rate limits. "
-                        "Users sync their teams during spawn with per-user throttling."
-                    ),
-                }
-            )
+        from core.config import HubConfig
+        from core.groups import fetch_github_team_members_table, sync_user_github_teams
+
+        config = HubConfig.get()
+        github_org = _handler_config.get("github_org", "")
+        platform_github_token = config.git_clone.defaultAccessToken
+        if not github_org:
+            raise web.HTTPError(400, "No GitHub organization configured")
+        if not platform_github_token:
+            raise web.HTTPError(400, "No platform GitHub token configured")
+
+        team_resource_mapping = _handler_config.get("team_resource_mapping", {})
+        valid_mapping_keys = set(team_resource_mapping.keys())
+        teams_by_login = await fetch_github_team_members_table(
+            platform_github_token,
+            github_org,
+            valid_mapping_keys,
+            force=True,
         )
+        if teams_by_login is None:
+            raise web.HTTPError(502, "Failed to fetch GitHub team members")
+
+        synced = 0
+        failed = 0
+        skipped = 0
+
+        for user in self.users.values():
+            if not user.name.startswith("github:"):
+                skipped += 1
+                continue
+
+            try:
+                login = user.name.split(":", 1)[1].lower()
+                sync_user_github_teams(user, teams_by_login.get(login, []), valid_mapping_keys, self.db)
+                synced += 1
+            except Exception:
+                self.log.warning("Failed to sync teams for %s", user.name, exc_info=True)
+                failed += 1
+
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps({"synced": synced, "failed": failed, "skipped": skipped}))
 
 
 # =============================================================================
