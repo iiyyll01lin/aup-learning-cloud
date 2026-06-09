@@ -23,6 +23,15 @@ REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"; REAL_HOME="${REAL_HOME:
 mkdir -p "$STATE_DIR"; exec > >(tee -a "$LOG") 2>&1
 echo "== auplc demo setup ($(date)) user=$REAL_USER tag=$IMAGE_TAG mode=${1:-auto} =="
 
+# --- single-instance lock: if another run is already going (e.g. a manual run
+#     while the post-reboot auto-resume is still installing), exit instead of
+#     kicking off a second concurrent install ---
+exec 9>"$STATE_DIR/lock"
+if ! flock -n 9; then
+  echo "Another demo-setup.sh run is already in progress (lock: $STATE_DIR/lock). Exiting."
+  exit 0
+fi
+
 MODE="prereq"
 [ "${1:-}" = "--resume" ] && MODE="install"
 [ -f "$STATE_FILE" ] && [ "$(cat "$STATE_FILE")" = "await-install" ] && MODE="install"
@@ -73,6 +82,9 @@ RemainAfterExit=yes
 Environment=IMAGE_TAG=$IMAGE_TAG
 Environment=ADMIN=$ADMIN
 ExecStart=/usr/bin/env SUDO_USER=$REAL_USER /bin/bash $SELF --resume
+
+[Install]
+WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
     systemctl enable "$RESUME_UNIT"
