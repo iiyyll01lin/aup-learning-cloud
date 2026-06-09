@@ -194,6 +194,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -203,7 +214,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
@@ -260,6 +271,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -274,6 +296,13 @@ jobs:
           npm --prefix dockerfiles/Code/auplc-hub-link run package
           test -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
 
+      - name: Clean Hub link build artifacts
+        if: always()
+        run: |
+          rm -rf dockerfiles/Code/auplc-hub-link/node_modules
+          rm -rf dockerfiles/Code/auplc-hub-link/out
+          npm cache clean --force
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -283,7 +312,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
@@ -329,6 +358,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -338,7 +378,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
@@ -397,6 +437,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -411,6 +462,13 @@ jobs:
           npm --prefix dockerfiles/Code/auplc-hub-link run package
           test -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
 
+      - name: Clean Hub link build artifacts
+        if: always()
+        run: |
+          rm -rf dockerfiles/Code/auplc-hub-link/node_modules
+          rm -rf dockerfiles/Code/auplc-hub-link/out
+          npm cache clean --force
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -420,7 +478,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata (target-suffixed tags)
         id: meta-suffixed
@@ -532,7 +590,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve GPU config
         id: suffix
@@ -650,6 +708,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -658,7 +727,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare build context
         run: cp -r projects/${{ matrix.course }} dockerfiles/Courses/${{ matrix.course }}/course_data
@@ -753,3 +822,7 @@ jobs:
           cache-from: type=gha,scope=course-${{ matrix.course }}-${{ matrix.gpu_target }}
           cache-to: type=gha,mode=max,scope=course-${{ matrix.course }}-${{ matrix.gpu_target }}
           provenance: false
+
+      - name: Clean course build context
+        if: always()
+        run: rm -rf dockerfiles/Courses/${{ matrix.course }}/course_data

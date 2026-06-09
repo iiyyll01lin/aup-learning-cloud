@@ -30,6 +30,14 @@ installer = [
     "questionary>=2.0.1",
     "prompt_toolkit>=3.0.43",
 ]
+test = [
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/installer"]
+pythonpath = ["."]
 
 [tool.ruff]
 # Target Python version
