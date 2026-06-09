@@ -290,6 +290,194 @@ async def fetch_github_team_members(access_token: str, org_name: str, team_slug:
     return members
 
 
+def _build_github_team_members_graphql_query(team_count: int) -> str:
+    variable_defs = ["$org: String!"]
+    team_fields = []
+    for index in range(team_count):
+        variable_defs.extend([f"$slug{index}: String!", f"$after{index}: String"])
+        team_fields.append(
+            f"""
+      team{index}: team(slug: $slug{index}) {{
+        members(first: 100, after: $after{index}) {{
+          nodes {{
+            login
+          }}
+          pageInfo {{
+            hasNextPage
+            endCursor
+          }}
+        }}
+      }}"""
+        )
+
+    return f"""
+query({", ".join(variable_defs)}) {{
+  organization(login: $org) {{
+{"".join(team_fields)}
+  }}
+}}
+"""
+
+
+_GITHUB_ORG_TEAMS_GRAPHQL_QUERY = """
+query($org: String!, $after: String) {
+  organization(login: $org) {
+    teams(first: 100, after: $after) {
+      nodes {
+        name
+        slug
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
+
+
+async def fetch_github_org_team_slugs_graphql(access_token: str, org_name: str) -> set[str] | None:
+    """Fetch all team slugs that actually exist in a GitHub organization."""
+    if not access_token or not org_name:
+        return set()
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    team_slugs: set[str] = set()
+    after: str | None = None
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            while True:
+                async with session.post(
+                    "https://api.github.com/graphql",
+                    headers=headers,
+                    json={"query": _GITHUB_ORG_TEAMS_GRAPHQL_QUERY, "variables": {"org": org_name, "after": after}},
+                ) as resp:
+                    if resp.status != 200:
+                        log.warning("GitHub GraphQL API returned status %d when fetching org teams", resp.status)
+                        return None
+                    data = await resp.json()
+
+                if data.get("errors"):
+                    log.warning("GitHub GraphQL API returned errors when fetching org teams: %s", data["errors"])
+                    return None
+
+                organization = data.get("data", {}).get("organization")
+                if organization is None:
+                    log.warning("GitHub GraphQL API did not return organization %s", org_name)
+                    return None
+
+                teams = organization.get("teams") or {}
+                for team in teams.get("nodes") or []:
+                    slug = team.get("slug") if isinstance(team, dict) else None
+                    if isinstance(slug, str) and slug:
+                        team_slugs.add(slug)
+
+                page_info = teams.get("pageInfo") or {}
+                if not page_info.get("hasNextPage"):
+                    break
+                after = page_info.get("endCursor")
+    except Exception as e:
+        log.warning("Error fetching GitHub org teams with GraphQL for org %s: %s", org_name, e)
+        return None
+
+    return team_slugs
+
+
+async def fetch_github_team_members_table_graphql(
+    access_token: str,
+    org_name: str,
+    team_keys: list[str],
+) -> dict[str, list[str]] | None:
+    """Fetch a login -> configured team-key table with batched GraphQL team queries."""
+    if not access_token or not org_name or not team_keys:
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    teams_by_login: dict[str, list[str]] = {}
+    actual_team_slugs = await fetch_github_org_team_slugs_graphql(access_token, org_name)
+    if actual_team_slugs is None:
+        return None
+
+    existing_team_keys = []
+    for team_key in team_keys:
+        api_slug = _github_team_api_slug(team_key)
+        if api_slug in actual_team_slugs:
+            existing_team_keys.append(team_key)
+        else:
+            log.warning("GitHub org %s does not have configured team %s", org_name, api_slug)
+
+    pending = dict.fromkeys(existing_team_keys)
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            while pending:
+                batch_keys = list(pending)
+                variables: dict[str, str | None] = {"org": org_name}
+                for index, team_key in enumerate(batch_keys):
+                    variables[f"slug{index}"] = _github_team_api_slug(team_key)
+                    variables[f"after{index}"] = pending[team_key]
+
+                async with session.post(
+                    "https://api.github.com/graphql",
+                    headers=headers,
+                    json={
+                        "query": _build_github_team_members_graphql_query(len(batch_keys)),
+                        "variables": variables,
+                    },
+                ) as resp:
+                    if resp.status != 200:
+                        log.warning("GitHub GraphQL API returned status %d when fetching team members", resp.status)
+                        return None
+                    data = await resp.json()
+
+                if data.get("errors"):
+                    log.warning("GitHub GraphQL API returned errors when fetching team members: %s", data["errors"])
+                    return None
+
+                organization = data.get("data", {}).get("organization")
+                if organization is None:
+                    log.warning("GitHub GraphQL API did not return organization %s", org_name)
+                    return None
+
+                next_pending: dict[str, str | None] = {}
+                for index, team_key in enumerate(batch_keys):
+                    team = organization.get(f"team{index}")
+                    if team is None:
+                        log.warning(
+                            "GitHub GraphQL API did not return team %s in org %s",
+                            _github_team_api_slug(team_key),
+                            org_name,
+                        )
+                        continue
+
+                    members = team.get("members") or {}
+                    for member in members.get("nodes") or []:
+                        login = member.get("login") if isinstance(member, dict) else None
+                        if isinstance(login, str) and login:
+                            teams_by_login.setdefault(login.lower(), []).append(team_key)
+
+                    page_info = members.get("pageInfo") or {}
+                    if page_info.get("hasNextPage"):
+                        next_pending[team_key] = page_info.get("endCursor")
+
+                pending = next_pending
+    except Exception as e:
+        log.warning("Error fetching GitHub team members with GraphQL for org %s: %s", org_name, e)
+        return None
+
+    return teams_by_login
+
+
 async def fetch_github_team_members_table(
     app_id: str,
     installation_id: str,
@@ -329,13 +517,13 @@ async def fetch_github_team_members_table(
         if not installation_token:
             return None
 
-        teams_by_login: dict[str, list[str]] = {}
-        for team_key in github_team_keys:
-            members = await fetch_github_team_members(installation_token, org_name, _github_team_api_slug(team_key))
-            if members is None:
-                return None
-            for login in members:
-                teams_by_login.setdefault(login, []).append(team_key)
+        teams_by_login = await fetch_github_team_members_table_graphql(
+            installation_token,
+            org_name,
+            github_team_keys,
+        )
+        if teams_by_login is None:
+            return None
 
         _GITHUB_TEAM_MEMBERS_CACHE[cache_key] = (now, teams_by_login)
         return {login: list(teams) for login, teams in teams_by_login.items()}
