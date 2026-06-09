@@ -372,6 +372,7 @@ hub:
     # Webhook: off
     GitHubOAuthenticator:
       oauth_callback_url: "https://your.domain.com/hub/github/oauth_callback"
+      app_id: "TODO"
       client_id: "TODO"
       client_secret: "TODO"
       allowed_organizations:
