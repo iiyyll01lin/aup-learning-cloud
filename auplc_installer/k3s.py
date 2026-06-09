@@ -140,23 +140,26 @@ def _dummy_interface_exists() -> bool:
 
 def setup_dummy_interface() -> None:
     if _dummy_interface_exists():
-        log("Dummy interface already exists, skipping setup")
-        return
+        log("Dummy interface already exists, skipping interface bring-up")
+    else:
+        log("Setting up dummy network interface for portable operation...")
+        run(["ip", "link", "add", "dummy0", "type", "dummy"], sudo=True)
+        run(["ip", "link", "set", "dummy0", "up"], sudo=True)
+        run(["ip", "addr", "add", f"{K3S_NODE_IP}/32", "dev", "dummy0"], sudo=True)
 
-    log("Setting up dummy network interface for portable operation...")
-    run(["ip", "link", "add", "dummy0", "type", "dummy"], sudo=True)
-    run(["ip", "link", "set", "dummy0", "up"], sudo=True)
-    run(["ip", "addr", "add", f"{K3S_NODE_IP}/32", "dev", "dummy0"], sudo=True)
-
+    # Always (re)write + enable the unit, even when dummy0 already exists, so
+    # that ``rt reinstall`` refreshes the unit on already-deployed machines.
     unit = (
         "[Unit]\n"
         "Description=Setup dummy network interface for K3s portable operation\n"
         "Before=k3s.service\n"
-        "After=network.target\n\n"
+        "After=network-online.target\n"
+        "Wants=network-online.target\n\n"
         "[Service]\n"
         "Type=oneshot\n"
         "RemainAfterExit=yes\n"
-        f"ExecStart=/bin/bash -c 'ip link show dummy0 || (ip link add dummy0 type dummy && ip link set dummy0 up && ip addr add {K3S_NODE_IP}/32 dev dummy0)'\n"
+        "ExecStartPre=-/sbin/modprobe dummy\n"
+        f"ExecStart=/bin/bash -c 'ip link show dummy0 >/dev/null 2>&1 || ip link add dummy0 type dummy; ip link set dummy0 up; ip addr replace {K3S_NODE_IP}/32 dev dummy0'\n"
         "ExecStop=/bin/bash -c 'ip link del dummy0 2>/dev/null || true'\n\n"
         "[Install]\n"
         "WantedBy=multi-user.target\n"
@@ -255,7 +258,36 @@ def install_k3s_single_node(
             with contextlib.suppress(OSError):
                 os.remove(installer_script)
 
+    _install_k3s_dropins(use_docker=use_docker)
     _configure_kubeconfig()
+
+
+def _install_k3s_dropins(*, use_docker: bool) -> None:
+    """Add a k3s systemd drop-in so it auto-starts after reboot (docker mode).
+
+    The upstream k3s unit from get.k3s.io has no ordering dependency on
+    ``docker.service`` (nor on our ``dummy-interface.service``), so on a
+    ``--docker`` install k3s can start before dockerd/dummy0 are ready and
+    crash-loop. The drop-in adds that ordering and we enable docker so it
+    comes up on boot too. No-op in containerd mode.
+    """
+    if not use_docker:
+        return
+    run(["mkdir", "-p", "/etc/systemd/system/k3s.service.d"], sudo=True)
+    content = (
+        "[Unit]\n"
+        "After=docker.service dummy-interface.service\n"
+        "Wants=docker.service dummy-interface.service\n"
+    )
+    rc = run_pipe_text_to(
+        ["tee", "/etc/systemd/system/k3s.service.d/10-auplc-autostart.conf"],
+        input_text=content,
+        sudo=True,
+    )
+    if rc != 0:
+        raise InstallerError("Failed to write k3s autostart drop-in")
+    run(["systemctl", "daemon-reload"], sudo=True)
+    run(["systemctl", "enable", "docker"], sudo=True, check=False)
 
 
 def _configure_kubeconfig() -> None:
