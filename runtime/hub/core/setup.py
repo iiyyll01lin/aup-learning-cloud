@@ -130,10 +130,10 @@ def setup_hub(c: Any) -> None:
             try:
                 from core.groups import sync_github_teams_for_user
 
-                platform_github_token = z2jh.get_config("hub.config.GitHubOAuthenticator.client_secret", "")
+                github_app_id = z2jh.get_config("hub.config.GitHubOAuthenticator.app_id", "")
                 synced = await sync_github_teams_for_user(
                     spawner.user,
-                    platform_github_token,
+                    github_app_id,
                     config.github_org_name,
                     set(config.teams.mapping.keys()),
                     spawner.user.db,

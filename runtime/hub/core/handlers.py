@@ -1552,16 +1552,17 @@ class GroupSyncAPIHandler(APIHandler):
         from core.groups import fetch_github_team_members_table, sync_user_github_teams
 
         github_org = _handler_config.get("github_org", "")
-        platform_github_token = z2jh.get_config("hub.config.GitHubOAuthenticator.client_secret", "")
         if not github_org:
             raise web.HTTPError(400, "No GitHub organization configured")
-        if not platform_github_token:
-            raise web.HTTPError(400, "No platform GitHub token configured")
+
+        github_app_id = z2jh.get_config("hub.config.GitHubOAuthenticator.app_id", "")
+        if not github_app_id:
+            raise web.HTTPError(400, "No GitHub App ID configured")
 
         team_resource_mapping = _handler_config.get("team_resource_mapping", {})
         valid_mapping_keys = set(team_resource_mapping.keys())
         teams_by_login = await fetch_github_team_members_table(
-            platform_github_token,
+            github_app_id,
             github_org,
             valid_mapping_keys,
             force=True,
