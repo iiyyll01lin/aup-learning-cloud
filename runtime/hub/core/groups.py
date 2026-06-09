@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from contextlib import suppress
 
@@ -45,43 +44,55 @@ log = logging.getLogger("jupyterhub.groups")
 GITHUB_TEAM_SOURCE = "github-team"
 SYSTEM_SOURCE = "system"
 SYSTEM_GROUP_NAMES = {"github-users", "native-users"}
-_GITHUB_TEAM_SYNC_CACHE: dict[str, tuple[float, list[str]]] = {}
+_GITHUB_TEAM_SYNC_CACHE: dict[tuple[str, str, str, str], tuple[float, list[str]]] = {}
 _GITHUB_TEAM_SYNC_LOCKS: dict[str, asyncio.Lock] = {}
-_GITHUB_TEAM_MEMBERS_CACHE: dict[tuple[str, tuple[str, ...]], tuple[float, dict[str, list[str]]]] = {}
+_GITHUB_TEAM_MEMBERS_CACHE: dict[tuple[str, str, str, tuple[str, ...]], tuple[float, dict[str, list[str]]]] = {}
 _GITHUB_TEAM_MEMBERS_LOCK = asyncio.Lock()
-_GITHUB_APP_INSTALLATION_TOKEN: tuple[str, float] | None = None
+_GITHUB_APP_INSTALLATION_TOKEN: dict[tuple[str, str], tuple[str, float]] = {}
 _GITHUB_APP_INSTALLATION_TOKEN_LOCK = asyncio.Lock()
 
 
-def _github_team_sync_ttl() -> int:
-    with suppress(ValueError):
-        return max(0, int(os.getenv("GITHUB_TEAM_SYNC_TTL_SECONDS", "3600")))
+def _github_team_sync_ttl(team_sync_ttl_seconds: int | str | None = None) -> int:
+    if team_sync_ttl_seconds in (None, ""):
+        return 3600
+    with suppress(TypeError, ValueError):
+        return max(0, int(team_sync_ttl_seconds))
     return 3600
 
 
-def _github_app_private_key() -> str:
-    private_key_file = os.getenv("GITHUB_APP_PRIVATE_KEY_FILE", "").strip()
+def _github_app_private_key(private_key: str = "", private_key_file: str = "") -> str:
+    private_key_file = private_key_file.strip()
     if private_key_file:
-        with open(private_key_file) as f:
-            return f.read()
-    return os.getenv("GITHUB_APP_PRIVATE_KEY", "").replace("\\n", "\n").strip()
+        try:
+            with open(private_key_file) as f:
+                return f.read()
+        except OSError as e:
+            log.warning("Unable to read GitHub App private key file %s: %s", private_key_file, e)
+            return ""
+    return private_key.replace("\\n", "\n").strip()
 
 
-async def get_github_app_installation_token(app_id: str) -> str | None:
+async def get_github_app_installation_token(
+    app_id: str,
+    installation_id: str,
+    *,
+    private_key: str = "",
+    private_key_file: str = "",
+) -> str | None:
     """Create or reuse a GitHub App installation access token for group sync."""
-    global _GITHUB_APP_INSTALLATION_TOKEN
-
     now = time.time()
-    if _GITHUB_APP_INSTALLATION_TOKEN and now < _GITHUB_APP_INSTALLATION_TOKEN[1] - 300:
-        return _GITHUB_APP_INSTALLATION_TOKEN[0]
+    cache_key = (app_id, installation_id)
+    cached_token = _GITHUB_APP_INSTALLATION_TOKEN.get(cache_key)
+    if cached_token and now < cached_token[1] - 300:
+        return cached_token[0]
 
     async with _GITHUB_APP_INSTALLATION_TOKEN_LOCK:
         now = time.time()
-        if _GITHUB_APP_INSTALLATION_TOKEN and now < _GITHUB_APP_INSTALLATION_TOKEN[1] - 300:
-            return _GITHUB_APP_INSTALLATION_TOKEN[0]
+        cached_token = _GITHUB_APP_INSTALLATION_TOKEN.get(cache_key)
+        if cached_token and now < cached_token[1] - 300:
+            return cached_token[0]
 
-        installation_id = os.getenv("GITHUB_APP_INSTALLATION_ID", "").strip()
-        private_key = _github_app_private_key()
+        private_key = _github_app_private_key(private_key=private_key, private_key_file=private_key_file)
         if not app_id or not installation_id or not private_key:
             log.warning(
                 "GitHub App installation token is unavailable because app id, installation id, or private key is missing"
@@ -128,7 +139,7 @@ async def get_github_app_installation_token(app_id: str) -> str | None:
             with suppress(ValueError):
                 expires_ts = datetime.fromisoformat(expires_at.replace("Z", "+00:00")).timestamp()
 
-        _GITHUB_APP_INSTALLATION_TOKEN = (token, expires_ts)
+        _GITHUB_APP_INSTALLATION_TOKEN[cache_key] = (token, expires_ts)
         return token
 
 
@@ -173,9 +184,13 @@ async def fetch_github_team_members(access_token: str, org_name: str, team_slug:
 
 async def fetch_github_team_members_table(
     app_id: str,
+    installation_id: str,
+    private_key: str,
+    private_key_file: str,
     org_name: str,
     team_slugs: set[str],
     *,
+    team_sync_ttl_seconds: int | str | None = None,
     force: bool = False,
 ) -> dict[str, list[str]] | None:
     """Fetch a login -> team-slugs table using one GitHub request sequence per team."""
@@ -183,9 +198,9 @@ async def fetch_github_team_members_table(
     if not app_id or not org_name or not github_team_keys:
         return {}
 
-    cache_key = (app_id, org_name, tuple(github_team_keys))
+    cache_key = (app_id, installation_id, org_name, tuple(github_team_keys))
     now = time.time()
-    ttl = _github_team_sync_ttl()
+    ttl = _github_team_sync_ttl(team_sync_ttl_seconds)
     cached = _GITHUB_TEAM_MEMBERS_CACHE.get(cache_key)
     if not force and cached and now - cached[0] < ttl:
         return {login: list(teams) for login, teams in cached[1].items()}
@@ -196,7 +211,12 @@ async def fetch_github_team_members_table(
         if not force and cached and now - cached[0] < ttl:
             return {login: list(teams) for login, teams in cached[1].items()}
 
-        installation_token = await get_github_app_installation_token(app_id)
+        installation_token = await get_github_app_installation_token(
+            app_id,
+            installation_id,
+            private_key=private_key,
+            private_key_file=private_key_file,
+        )
         if not installation_token:
             return None
 
@@ -215,10 +235,14 @@ async def fetch_github_team_members_table(
 async def sync_github_teams_for_user(
     user: JupyterHubUser,
     app_id: str,
+    installation_id: str,
+    private_key: str,
+    private_key_file: str,
     org_name: str,
     valid_mapping_keys: set[str],
     db: Session,
     *,
+    team_sync_ttl_seconds: int | str | None = None,
     force: bool = False,
 ) -> bool:
     """Sync one GitHub user's teams with the configured platform token.
@@ -233,22 +257,27 @@ async def sync_github_teams_for_user(
     lock = _GITHUB_TEAM_SYNC_LOCKS.setdefault(user.name, asyncio.Lock())
     async with lock:
         now = time.time()
-        ttl = _github_team_sync_ttl()
-        cached = _GITHUB_TEAM_SYNC_CACHE.get(user.name)
+        ttl = _github_team_sync_ttl(team_sync_ttl_seconds)
+        cache_key = (user.name, app_id, installation_id, org_name)
+        cached = _GITHUB_TEAM_SYNC_CACHE.get(cache_key)
         if not force and cached and now - cached[0] < ttl:
             team_slugs = cached[1]
         else:
             github_username = user.name.split(":", 1)[1]
             teams_by_login = await fetch_github_team_members_table(
                 app_id,
+                installation_id,
+                private_key,
+                private_key_file,
                 org_name,
                 valid_mapping_keys,
+                team_sync_ttl_seconds=team_sync_ttl_seconds,
                 force=force,
             )
             if teams_by_login is None:
                 return False
             team_slugs = teams_by_login.get(github_username.lower(), [])
-            _GITHUB_TEAM_SYNC_CACHE[user.name] = (now, team_slugs)
+            _GITHUB_TEAM_SYNC_CACHE[cache_key] = (now, team_slugs)
 
         sync_user_github_teams(user, team_slugs, valid_mapping_keys, db)
         return True

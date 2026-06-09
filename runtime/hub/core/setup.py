@@ -77,6 +77,11 @@ def setup_hub(c: Any) -> None:
 
     # Get the initialized config singleton
     config = HubConfig.get()
+    github_app_id = z2jh.get_config("hub.config.GitHubOAuthenticator.app_id", "")
+    github_app_installation_id = z2jh.get_config("hub.config.GitHubOAuthenticator.installation_id", "")
+    github_app_private_key = z2jh.get_config("hub.config.GitHubOAuthenticator.private_key", "")
+    github_app_private_key_file = z2jh.get_config("hub.config.GitHubOAuthenticator.private_key_file", "")
+    github_team_sync_ttl_seconds = z2jh.get_config("hub.config.GitHubOAuthenticator.team_sync_ttl_seconds", 3600)
 
     # =========================================================================
     # Configure Spawner
@@ -130,13 +135,16 @@ def setup_hub(c: Any) -> None:
             try:
                 from core.groups import sync_github_teams_for_user
 
-                github_app_id = z2jh.get_config("hub.config.GitHubOAuthenticator.app_id", "")
                 synced = await sync_github_teams_for_user(
                     spawner.user,
                     github_app_id,
+                    github_app_installation_id,
+                    github_app_private_key,
+                    github_app_private_key_file,
                     config.github_org_name,
                     set(config.teams.mapping.keys()),
                     spawner.user.db,
+                    team_sync_ttl_seconds=github_team_sync_ttl_seconds,
                 )
                 if not synced:
                     print(

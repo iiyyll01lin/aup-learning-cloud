@@ -31,6 +31,7 @@ import time
 
 from oauthenticator.github import GitHubOAuthenticator
 from oauthenticator.oauth2 import OAuthCallbackHandler
+from traitlets import Int, Unicode
 
 log = logging.getLogger("jupyterhub.auth.github")
 
@@ -57,6 +58,36 @@ class CustomGitHubOAuthenticator(GitHubOAuthenticator):
 
     name = "github"
     callback_handler = _GitHubAppInstallCallbackHandler
+
+    app_id = Unicode(
+        "",
+        config=True,
+        help="GitHub App ID used to create installation access tokens for platform-owned API calls.",
+    )
+
+    installation_id = Unicode(
+        "",
+        config=True,
+        help="GitHub App installation ID used for platform-owned team synchronization.",
+    )
+
+    private_key_file = Unicode(
+        "",
+        config=True,
+        help="Path to the mounted GitHub App private key PEM file used for installation token creation.",
+    )
+
+    private_key = Unicode(
+        "",
+        config=True,
+        help="GitHub App private key PEM content used for installation token creation when no file path is set.",
+    )
+
+    team_sync_ttl_seconds = Int(
+        3600,
+        config=True,
+        help="TTL in seconds for GitHub team membership sync caches.",
+    )
 
     async def authenticate(self, handler, data=None):
         result = await super().authenticate(handler, data)

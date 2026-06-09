@@ -1558,13 +1558,21 @@ class GroupSyncAPIHandler(APIHandler):
         github_app_id = z2jh.get_config("hub.config.GitHubOAuthenticator.app_id", "")
         if not github_app_id:
             raise web.HTTPError(400, "No GitHub App ID configured")
+        github_app_installation_id = z2jh.get_config("hub.config.GitHubOAuthenticator.installation_id", "")
+        github_app_private_key = z2jh.get_config("hub.config.GitHubOAuthenticator.private_key", "")
+        github_app_private_key_file = z2jh.get_config("hub.config.GitHubOAuthenticator.private_key_file", "")
+        github_team_sync_ttl_seconds = z2jh.get_config("hub.config.GitHubOAuthenticator.team_sync_ttl_seconds", 3600)
 
         team_resource_mapping = _handler_config.get("team_resource_mapping", {})
         valid_mapping_keys = set(team_resource_mapping.keys())
         teams_by_login = await fetch_github_team_members_table(
             github_app_id,
+            github_app_installation_id,
+            github_app_private_key,
+            github_app_private_key_file,
             github_org,
             valid_mapping_keys,
+            team_sync_ttl_seconds=github_team_sync_ttl_seconds,
             force=True,
         )
         if teams_by_login is None:
