@@ -17,6 +17,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import asyncio
 import importlib.util
 import sys
 import types
@@ -62,6 +63,9 @@ def load_module(name: str, path: Path):
 
 groups = load_module("core.groups", CORE / "groups.py")
 resolve_resources_for_user = groups.resolve_resources_for_user
+fetch_github_team_members = groups.fetch_github_team_members
+get_github_app_installation_token = groups.get_github_app_installation_token
+fetch_github_team_members_table = groups.fetch_github_team_members_table
 sync_user_github_teams = groups.sync_user_github_teams
 
 
@@ -101,6 +105,61 @@ class DummyDb:
         pass
 
 
+class DummyResponse:
+    def __init__(self, status, payload):
+        self.status = status
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def json(self):
+        return self._payload
+
+
+class DummyClientSession:
+    created = 0
+    get_calls = 0
+    post_calls = 0
+
+    def __init__(self):
+        type(self).created += 1
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    def get(self, url, headers=None):
+        type(self).get_calls += 1
+        if url.endswith("/orgs/test-org/installation"):
+            return DummyResponse(200, {"id": 12345})
+        if url.endswith("/orgs/test-org/teams/missing-team/members?per_page=100&page=1"):
+            return DummyResponse(404, {})
+        if url.endswith("/orgs/test-org/teams/aup/members?per_page=100&page=1"):
+            return DummyResponse(200, [{"login": "OctoUser"}])
+        return DummyResponse(200, {"repositories": []})
+
+    def post(self, url, headers=None):
+        type(self).post_calls += 1
+        if url.endswith("/app/installations/12345/access_tokens"):
+            return DummyResponse(201, {"token": "cached-token", "expires_at": "2099-01-01T00:00:00Z"})
+        return DummyResponse(500, {})
+
+
+def _reset_dummy_client_session():
+    DummyClientSession.created = 0
+    DummyClientSession.get_calls = 0
+    DummyClientSession.post_calls = 0
+    groups._GITHUB_APP_INSTALLATION_ID_CACHE.clear()
+    groups._GITHUB_APP_INSTALLATION_TOKEN.clear()
+    groups._GITHUB_TEAM_MEMBERS_CACHE.clear()
+
+
 def test_sync_user_github_teams_skips_removals_when_team_fetch_failed():
     existing_group = DummyGroup("team-a")
     user = DummyUser([existing_group])
@@ -108,6 +167,67 @@ def test_sync_user_github_teams_skips_removals_when_team_fetch_failed():
     sync_user_github_teams(user, None, {"team-a"}, DummyDb())
 
     assert user.orm_user.groups == [existing_group]
+
+
+def test_fetch_github_team_members_treats_missing_team_as_empty_set(monkeypatch, caplog):
+    _reset_dummy_client_session()
+    monkeypatch.setattr(groups.aiohttp, "ClientSession", DummyClientSession)
+
+    caplog.set_level("WARNING", logger="jupyterhub.groups")
+    members = asyncio.run(fetch_github_team_members("token", "test-org", "missing-team"))
+
+    assert members == set()
+    assert "team missing-team" in caplog.text
+    assert "test-org" in caplog.text
+
+
+def test_get_github_app_installation_token_discovers_installation_id(monkeypatch):
+    _reset_dummy_client_session()
+    monkeypatch.setattr(groups.aiohttp, "ClientSession", DummyClientSession)
+    monkeypatch.setattr(groups.jwt, "encode", lambda payload, private_key, algorithm: "jwt-token")
+
+    token = asyncio.run(
+        get_github_app_installation_token(
+            "app-123",
+            "",
+            org_name="test-org",
+            private_key="dummy-private-key",
+        )
+    )
+    cached_token = asyncio.run(
+        get_github_app_installation_token(
+            "app-123",
+            "",
+            org_name="test-org",
+            private_key="dummy-private-key",
+        )
+    )
+
+    assert token == "cached-token"
+    assert cached_token == "cached-token"
+    assert DummyClientSession.created == 2
+    assert DummyClientSession.get_calls == 1
+    assert DummyClientSession.post_calls == 1
+
+
+def test_fetch_github_team_members_table_uses_api_slug_and_preserves_group_key(monkeypatch):
+    _reset_dummy_client_session()
+    monkeypatch.setattr(groups.aiohttp, "ClientSession", DummyClientSession)
+    monkeypatch.setattr(groups.jwt, "encode", lambda payload, private_key, algorithm: "jwt-token")
+
+    teams_by_login = asyncio.run(
+        fetch_github_team_members_table(
+            "app-123",
+            "",
+            "dummy-private-key",
+            "",
+            "test-org",
+            {"AUP"},
+            force=True,
+        )
+    )
+
+    assert teams_by_login == {"octouser": ["AUP"]}
 
 
 def test_resolve_resources_for_user_uses_group_mapping():

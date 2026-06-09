@@ -48,6 +48,8 @@ _GITHUB_TEAM_SYNC_CACHE: dict[tuple[str, str, str, str], tuple[float, list[str]]
 _GITHUB_TEAM_SYNC_LOCKS: dict[str, asyncio.Lock] = {}
 _GITHUB_TEAM_MEMBERS_CACHE: dict[tuple[str, str, str, tuple[str, ...]], tuple[float, dict[str, list[str]]]] = {}
 _GITHUB_TEAM_MEMBERS_LOCK = asyncio.Lock()
+_GITHUB_APP_INSTALLATION_ID_CACHE: dict[tuple[str, str], str] = {}
+_GITHUB_APP_INSTALLATION_ID_LOCK = asyncio.Lock()
 _GITHUB_APP_INSTALLATION_TOKEN: dict[tuple[str, str], tuple[str, float]] = {}
 _GITHUB_APP_INSTALLATION_TOKEN_LOCK = asyncio.Lock()
 
@@ -72,16 +74,32 @@ def _github_app_private_key(private_key: str = "", private_key_file: str = "") -
     return private_key.replace("\\n", "\n").strip()
 
 
+def _github_team_api_slug(team_key: str) -> str:
+    """Convert a configured group/team key to the GitHub team slug API form."""
+    return team_key.strip().lower().replace(" ", "-")
+
+
 async def get_github_app_installation_token(
     app_id: str,
-    installation_id: str,
+    installation_id: str = "",
+    org_name: str = "",
     *,
     private_key: str = "",
     private_key_file: str = "",
 ) -> str | None:
     """Create or reuse a GitHub App installation access token for group sync."""
+    resolved_installation_id = await _resolve_github_app_installation_id(
+        app_id,
+        installation_id,
+        org_name,
+        private_key=private_key,
+        private_key_file=private_key_file,
+    )
+    if not resolved_installation_id:
+        return None
+
     now = time.time()
-    cache_key = (app_id, installation_id)
+    cache_key = (app_id, resolved_installation_id)
     cached_token = _GITHUB_APP_INSTALLATION_TOKEN.get(cache_key)
     if cached_token and now < cached_token[1] - 300:
         return cached_token[0]
@@ -93,7 +111,7 @@ async def get_github_app_installation_token(
             return cached_token[0]
 
         private_key = _github_app_private_key(private_key=private_key, private_key_file=private_key_file)
-        if not app_id or not installation_id or not private_key:
+        if not app_id or not resolved_installation_id or not private_key:
             log.warning(
                 "GitHub App installation token is unavailable because app id, installation id, or private key is missing"
             )
@@ -114,7 +132,7 @@ async def get_github_app_installation_token(
             async with (
                 aiohttp.ClientSession() as session,
                 session.post(
-                    f"https://api.github.com/app/installations/{installation_id}/access_tokens",
+                    f"https://api.github.com/app/installations/{resolved_installation_id}/access_tokens",
                     headers=headers,
                 ) as resp,
             ):
@@ -143,6 +161,86 @@ async def get_github_app_installation_token(
         return token
 
 
+async def _resolve_github_app_installation_id(
+    app_id: str,
+    installation_id: str,
+    org_name: str,
+    *,
+    private_key: str = "",
+    private_key_file: str = "",
+) -> str | None:
+    installation_id = installation_id.strip()
+    if installation_id:
+        return installation_id
+
+    org_name = org_name.strip()
+    if not app_id or not org_name:
+        log.warning("GitHub App installation ID lookup is unavailable because app id or org name is missing")
+        return None
+
+    cache_key = (app_id, org_name)
+    cached_installation_id = _GITHUB_APP_INSTALLATION_ID_CACHE.get(cache_key)
+    if cached_installation_id:
+        return cached_installation_id
+
+    async with _GITHUB_APP_INSTALLATION_ID_LOCK:
+        cached_installation_id = _GITHUB_APP_INSTALLATION_ID_CACHE.get(cache_key)
+        if cached_installation_id:
+            return cached_installation_id
+
+        private_key = _github_app_private_key(private_key=private_key, private_key_file=private_key_file)
+        if not private_key:
+            log.warning("GitHub App installation ID lookup is unavailable because the private key is missing")
+            return None
+
+        now = time.time()
+        app_jwt = jwt.encode(
+            {"iat": int(now) - 60, "exp": int(now) + 540, "iss": app_id},
+            private_key,
+            algorithm="RS256",
+        )
+        headers = {
+            "Authorization": f"Bearer {app_jwt}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        try:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
+                    f"https://api.github.com/orgs/{org_name}/installation",
+                    headers=headers,
+                ) as resp,
+            ):
+                if resp.status == 404:
+                    log.warning("GitHub App installation lookup returned 404 for org %s", org_name)
+                    return None
+                if resp.status != 200:
+                    log.warning(
+                        "GitHub App installation lookup returned status %d for org %s",
+                        resp.status,
+                        org_name,
+                    )
+                    return None
+                data = await resp.json()
+        except Exception as e:
+            log.warning("Error resolving GitHub App installation for org %s: %s", org_name, e)
+            return None
+
+        resolved_installation_id = data.get("id")
+        if resolved_installation_id is None:
+            log.warning(
+                "GitHub App installation lookup for org %s did not include an installation id",
+                org_name,
+            )
+            return None
+
+        resolved_installation_id = str(resolved_installation_id)
+        _GITHUB_APP_INSTALLATION_ID_CACHE[cache_key] = resolved_installation_id
+        return resolved_installation_id
+
+
 async def fetch_github_team_members(access_token: str, org_name: str, team_slug: str) -> set[str] | None:
     """Fetch all GitHub usernames in one team using the configured platform token."""
     if not access_token or not org_name or not team_slug:
@@ -160,9 +258,19 @@ async def fetch_github_team_members(access_token: str, org_name: str, team_slug:
             while True:
                 url = f"https://api.github.com/orgs/{org_name}/teams/{team_slug}/members?per_page=100&page={page}"
                 async with session.get(url, headers=headers) as resp:
+                    if resp.status == 404:
+                        log.warning(
+                            "GitHub API returned status 404 when fetching members for team %s in org %s",
+                            team_slug,
+                            org_name,
+                        )
+                        return set()
                     if resp.status != 200:
                         log.warning(
-                            "GitHub API returned status %d when fetching members for team %s", resp.status, team_slug
+                            "GitHub API returned status %d when fetching members for team %s in org %s",
+                            resp.status,
+                            team_slug,
+                            org_name,
                         )
                         return None
                     data = await resp.json()
@@ -214,6 +322,7 @@ async def fetch_github_team_members_table(
         installation_token = await get_github_app_installation_token(
             app_id,
             installation_id,
+            org_name=org_name,
             private_key=private_key,
             private_key_file=private_key_file,
         )
@@ -221,12 +330,12 @@ async def fetch_github_team_members_table(
             return None
 
         teams_by_login: dict[str, list[str]] = {}
-        for team_slug in github_team_keys:
-            members = await fetch_github_team_members(installation_token, org_name, team_slug)
+        for team_key in github_team_keys:
+            members = await fetch_github_team_members(installation_token, org_name, _github_team_api_slug(team_key))
             if members is None:
                 return None
             for login in members:
-                teams_by_login.setdefault(login, []).append(team_slug)
+                teams_by_login.setdefault(login, []).append(team_key)
 
         _GITHUB_TEAM_MEMBERS_CACHE[cache_key] = (now, teams_by_login)
         return {login: list(teams) for login, teams in teams_by_login.items()}
