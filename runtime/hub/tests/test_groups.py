@@ -124,6 +124,7 @@ class DummyClientSession:
     created = 0
     get_calls = 0
     post_calls = 0
+    graphql_calls = 0
 
     def __init__(self):
         type(self).created += 1
@@ -144,10 +145,47 @@ class DummyClientSession:
             return DummyResponse(200, [{"login": "OctoUser"}])
         return DummyResponse(200, {"repositories": []})
 
-    def post(self, url, headers=None):
+    def post(self, url, headers=None, json=None):
         type(self).post_calls += 1
         if url.endswith("/app/installations/12345/access_tokens"):
             return DummyResponse(201, {"token": "cached-token", "expires_at": "2099-01-01T00:00:00Z"})
+        if url == "https://api.github.com/graphql":
+            type(self).graphql_calls += 1
+            if "teams(first: 100" in (json or {}).get("query", ""):
+                return DummyResponse(
+                    200,
+                    {
+                        "data": {
+                            "organization": {
+                                "teams": {
+                                    "nodes": [{"name": "AUP", "slug": "aup"}],
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                }
+                            }
+                        }
+                    },
+                )
+
+            organization = {}
+            variables = (json or {}).get("variables", {})
+            for key, value in variables.items():
+                if not key.startswith("slug"):
+                    continue
+                index = key.removeprefix("slug")
+                if value == "missing-team":
+                    organization[f"team{index}"] = None
+                elif value == "aup":
+                    organization[f"team{index}"] = {
+                        "members": {
+                            "nodes": [{"login": "OctoUser"}],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                else:
+                    organization[f"team{index}"] = {
+                        "members": {"nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}
+                    }
+            return DummyResponse(200, {"data": {"organization": organization}})
         return DummyResponse(500, {})
 
 
@@ -155,6 +193,7 @@ def _reset_dummy_client_session():
     DummyClientSession.created = 0
     DummyClientSession.get_calls = 0
     DummyClientSession.post_calls = 0
+    DummyClientSession.graphql_calls = 0
     groups._GITHUB_APP_INSTALLATION_ID_CACHE.clear()
     groups._GITHUB_APP_INSTALLATION_TOKEN.clear()
     groups._GITHUB_TEAM_MEMBERS_CACHE.clear()
@@ -228,6 +267,30 @@ def test_fetch_github_team_members_table_uses_api_slug_and_preserves_group_key(m
     )
 
     assert teams_by_login == {"octouser": ["AUP"]}
+    assert DummyClientSession.graphql_calls == 2
+
+
+def test_fetch_github_team_members_table_skips_missing_graphql_team(monkeypatch, caplog):
+    _reset_dummy_client_session()
+    monkeypatch.setattr(groups.aiohttp, "ClientSession", DummyClientSession)
+    monkeypatch.setattr(groups.jwt, "encode", lambda payload, private_key, algorithm: "jwt-token")
+
+    caplog.set_level("WARNING", logger="jupyterhub.groups")
+    teams_by_login = asyncio.run(
+        fetch_github_team_members_table(
+            "app-123",
+            "",
+            "dummy-private-key",
+            "",
+            "test-org",
+            {"AUP", "missing-team"},
+            force=True,
+        )
+    )
+
+    assert teams_by_login == {"octouser": ["AUP"]}
+    assert "configured team missing-team" in caplog.text
+    assert DummyClientSession.graphql_calls == 2
 
 
 def test_resolve_resources_for_user_uses_group_mapping():
