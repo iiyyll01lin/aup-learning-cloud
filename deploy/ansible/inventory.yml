@@ -22,12 +22,12 @@ k3s_cluster:
   children:
     server:
       hosts:
-      # suggested: aup-SHC1-395-1
-      # You need to config the hostname in /etc/hosts
-        <YOUR-SERVER-HOSTNAME>
+        # suggested: aup-SHC1-395-1
+        # You need to config the hostname in /etc/hosts
+        <YOUR-SERVER-HOSTNAME>:
     agent:
       hosts:
-        <YOUR-AGENT-HOSTNAME>
+        <YOUR-AGENT-HOSTNAME>:
         # strix-5:
         # phx-1:
         # phx-64g:
