@@ -337,6 +337,11 @@ custom:
 # Hub Configuration
 # ============================================================================
 hub:
+  # Use the following variable to specify a custom base URL for JupyterHub.
+  # If you would like JupyterHub to be served at https://your.domain.com/jupyterhub/
+  # set baseUrl: "/jupyterhub".
+  # baseUrl: /
+
   db:
     pvc:
       storageClassName: nfs-client
