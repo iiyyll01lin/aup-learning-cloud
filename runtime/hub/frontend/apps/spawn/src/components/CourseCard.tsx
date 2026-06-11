@@ -205,7 +205,7 @@ export const CourseCard = memo(function CourseCard({
             <small className="repo-url-error">{repoUrlError}</small>
           )}
 
-          {/* GitHub App Install/Manage Prompt (only for GitHub OAuth users) */}
+          {/* GitHub App Install/Manage Prompt (only for GitHub App users) */}
           {githubAppName && isCurrentUserGitHub() && (
             <a
               className="github-app-prompt"

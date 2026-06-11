@@ -158,7 +158,7 @@ Kubernetes provides a robust infrastructure for deploying and managing JupyterHu
 
 Seamless integration with GitHub Single Sign-On (SSO) and Native Authenticator for secure and efficient user authentication.
 - **Auto-admin on install**: Initial admin created automatically with random password
-- **Dual login**: GitHub OAuth + Native accounts on single login page
+- **Dual login**: GitHub App + Native accounts on single login page
 - **Batch user management**: CSV/Excel-based bulk operations via scripts
 
 ### Storage Management and Security
@@ -198,7 +198,7 @@ Full documentation is available at: **https://amdresearch.github.io/aup-learning
 
 - [Deployment Guide](deploy/README.md) - Single-node and multi-node deployment
 - [Configuration Reference](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/configuration-reference.html) - `runtime/values.yaml` field reference
-- [Authentication Guide](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/authentication-guide.html) - GitHub OAuth and native authentication
+- [Authentication Guide](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/authentication-guide.html) - GitHub App and native authentication
 - [User Management Guide](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/user-management.html) - Batch user operations with scripts
 - [User Quota System](https://amdresearch.github.io/aup-learning-cloud/jupyterhub/quota-system.html) - Resource usage tracking and quota management
 

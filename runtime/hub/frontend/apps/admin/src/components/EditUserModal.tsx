@@ -139,7 +139,7 @@ export function EditUserModal({ show, user, onHide, onUpdate }: Props) {
               </InputGroup>
               <Form.Text className="text-muted">
                 {isGitHubUser
-                  ? 'GitHub OAuth usernames cannot be renamed'
+                  ? 'GitHub App usernames cannot be renamed'
                   : 'Only letters, numbers, hyphens, and underscores allowed'}
               </Form.Text>
             </Form.Group>

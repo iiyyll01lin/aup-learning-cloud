@@ -53,8 +53,8 @@ custom:
   # Authentication mode
   # - auto-login: No credentials required, auto-login as 'student' (for single-node dev)
   # - dummy: Accept any username/password (for testing)
-  # - github: GitHub OAuth authentication
-  # - multi: GitHub OAuth + native first-use accounts
+  # - github: GitHub App authentication
+  # - multi: GitHub App + native first-use accounts
   authMode: "multi"
 
   # GitHub organization name for team-based resource access
@@ -94,7 +94,7 @@ custom:
   # Private repo access — two independent mechanisms (can be used together):
   #
   #   1. GitHub App (githubAppName)
-  #      For GitHub OAuth users. Users authorize per-repo read-only access via
+  #      For GitHub App users. Users authorize per-repo read-only access via
   #      the GitHub App UI. Token is obtained automatically from OAuth session.
   #      Requires migrating from OAuth App to GitHub App — see below.
   #
