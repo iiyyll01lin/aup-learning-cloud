@@ -165,7 +165,7 @@ directories or compare semantic versions itself.
 
 Default editor settings are also not baked into the image in this iteration. User workspaces and profiles should keep control over editor preferences.
 
-Local `.vsix` packages from `extensions/` are installed during the image build. The AUPLC Back-to-Hub extension is packaged from source inside the Dockerfile and then installed into the image; generated `.vsix` artifacts must not be committed. Before adding or redistributing additional VS Code, OpenVSX, or Marketplace extensions, verify that each extension's license and marketplace terms permit your intended use.
+Local `.vsix` packages from `extensions/` are installed during the image build. The AUPLC Back-to-Hub extension is packaged from `runtime/code-server/extensions/auplc-hub-link` inside the Dockerfile and then installed into the image; generated `.vsix` artifacts must not be committed. Before adding or redistributing additional VS Code, OpenVSX, or Marketplace extensions, verify that each extension's license and marketplace terms permit your intended use.
 
 ## Deployment Notes
 

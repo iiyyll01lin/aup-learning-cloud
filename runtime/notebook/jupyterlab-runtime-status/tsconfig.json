@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../hub/frontend/tsconfig.base.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "rootDir": "./src",
@@ -11,7 +11,7 @@
     "allowImportingTsExtensions": false,
     "baseUrl": ".",
     "paths": {
-      "@auplc/runtime-status": ["../runtime-status/dist/types/index.d.ts"]
+      "@auplc/runtime-status": ["../../shared/runtime-status/dist/types/index.d.ts"]
     }
   },
   "include": ["src"],

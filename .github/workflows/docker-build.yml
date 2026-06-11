@@ -26,6 +26,9 @@ on:
     paths:
       - 'dockerfiles/**'
       - 'runtime/hub/**'
+      - 'runtime/notebook/**'
+      - 'runtime/shared/**'
+      - 'runtime/code-server/**'
       - 'projects/**'
       - '.github/workflows/docker-build.yml'
       - '.github/build-config.json'
@@ -34,6 +37,9 @@ on:
     paths:
       - 'dockerfiles/**'
       - 'runtime/hub/**'
+      - 'runtime/notebook/**'
+      - 'runtime/shared/**'
+      - 'runtime/code-server/**'
       - 'projects/**'
       - '.github/workflows/docker-build.yml'
       - '.github/build-config.json'
@@ -169,14 +175,28 @@ jobs:
               - 'runtime/hub/**'
             code:
               - 'dockerfiles/Code/**'
+              - 'runtime/code-server/**'
+              - 'runtime/shared/**'
             courses:
               - 'dockerfiles/Courses/**'
               - 'dockerfiles/Base/**'
               - 'projects/**'
             base-cpu:
               - 'dockerfiles/Base/Dockerfile.cpu'
+              - 'runtime/notebook/**'
+              - 'runtime/shared/**'
+              - 'runtime/hub/frontend/package.json'
+              - 'runtime/hub/frontend/pnpm-lock.yaml'
+              - 'runtime/hub/frontend/pnpm-workspace.yaml'
+              - 'runtime/hub/frontend/tsconfig.base.json'
             base-gpu:
               - 'dockerfiles/Base/Dockerfile.rocm'
+              - 'runtime/notebook/**'
+              - 'runtime/shared/**'
+              - 'runtime/hub/frontend/package.json'
+              - 'runtime/hub/frontend/pnpm-lock.yaml'
+              - 'runtime/hub/frontend/pnpm-workspace.yaml'
+              - 'runtime/hub/frontend/tsconfig.base.json'
               - '.github/build-config.json'
 
   # ──────────────────────────────────────────────
@@ -287,20 +307,20 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: dockerfiles/Code/auplc-hub-link/package-lock.json
+          cache-dependency-path: runtime/code-server/extensions/auplc-hub-link/package-lock.json
 
       - name: Package Hub link extension
         run: |
-          npm --prefix dockerfiles/Code/auplc-hub-link ci
-          rm -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
-          npm --prefix dockerfiles/Code/auplc-hub-link run package
-          test -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          npm --prefix runtime/code-server/extensions/auplc-hub-link ci
+          rm -f runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          npm --prefix runtime/code-server/extensions/auplc-hub-link run package
+          test -f runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
 
       - name: Clean Hub link build artifacts
         if: always()
         run: |
-          rm -rf dockerfiles/Code/auplc-hub-link/node_modules
-          rm -rf dockerfiles/Code/auplc-hub-link/out
+          rm -rf runtime/code-server/extensions/auplc-hub-link/node_modules
+          rm -rf runtime/code-server/extensions/auplc-hub-link/out
           npm cache clean --force
 
       - name: Set up Docker Buildx
@@ -453,20 +473,20 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: dockerfiles/Code/auplc-hub-link/package-lock.json
+          cache-dependency-path: runtime/code-server/extensions/auplc-hub-link/package-lock.json
 
       - name: Package Hub link extension
         run: |
-          npm --prefix dockerfiles/Code/auplc-hub-link ci
-          rm -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
-          npm --prefix dockerfiles/Code/auplc-hub-link run package
-          test -f dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          npm --prefix runtime/code-server/extensions/auplc-hub-link ci
+          rm -f runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          npm --prefix runtime/code-server/extensions/auplc-hub-link run package
+          test -f runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
 
       - name: Clean Hub link build artifacts
         if: always()
         run: |
-          rm -rf dockerfiles/Code/auplc-hub-link/node_modules
-          rm -rf dockerfiles/Code/auplc-hub-link/out
+          rm -rf runtime/code-server/extensions/auplc-hub-link/node_modules
+          rm -rf runtime/code-server/extensions/auplc-hub-link/out
           npm cache clean --force
 
       - name: Set up Docker Buildx

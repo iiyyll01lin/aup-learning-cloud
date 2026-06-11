@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 packages:
+  - "../../shared/*"
+  - "../../notebook/*"
+  - "!../../notebook/*/auplc_jupyterlab_runtime_status/labextension"
   - "packages/*"
   - "!packages/*/auplc_jupyterlab_runtime_status/labextension"
   - "apps/*"
