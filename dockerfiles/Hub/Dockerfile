@@ -45,9 +45,7 @@ COPY runtime/hub/frontend/apps/home/package.json ./apps/home/
 
 # Install only the Hub frontend targets and their workspace dependencies.
 RUN pnpm install --frozen-lockfile \
-    --filter @auplc/admin... \
-    --filter @auplc/spawn... \
-    --filter @auplc/home... \
+    --filter './apps/**...' \
     --filter @auplc/login-css...
 
 # Copy source code
@@ -61,12 +59,7 @@ COPY runtime/hub/frontend/templates/ ./templates/
 
 # Build only Hub frontend targets. Notebook JupyterLab extensions are built in
 # notebook base images where Python/JupyterLab are available.
-RUN pnpm -r \
-    --filter @auplc/admin... \
-    --filter @auplc/spawn... \
-    --filter @auplc/home... \
-    --filter @auplc/login-css... \
-    run build
+RUN pnpm run build:hub
 
 # Stage 2: Final Hub image
 FROM ${HUB_IMAGE}

@@ -56,7 +56,7 @@ RUN rm -rf \
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi && \
     pnpm install --frozen-lockfile --filter @auplc/jupyterlab-runtime-status...
 
-RUN pnpm --filter @auplc/jupyterlab-runtime-status build && \
+RUN pnpm run build:notebook && \
     test -f packages/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension/package.json && \
     test -n "$(find packages/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension/static -name 'remoteEntry*.js' -print -quit)"
 

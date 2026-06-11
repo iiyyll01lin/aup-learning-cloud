@@ -40,6 +40,7 @@ def get_labextension_data_files():
 
     return sorted(files_by_directory.items())
 
+
 setup(
     packages=find_packages(),
     include_package_data=True,
