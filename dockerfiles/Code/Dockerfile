@@ -27,20 +27,20 @@ FROM ${NODE_IMAGE} AS node-runtime
 FROM node-runtime AS hub-link-builder
 
 ARG NPM_REGISTRY=
-WORKDIR /build/dockerfiles/Code/auplc-hub-link
+WORKDIR /build/runtime/code-server/extensions/auplc-hub-link
 
-COPY dockerfiles/Code/auplc-hub-link/package.json dockerfiles/Code/auplc-hub-link/package-lock.json ./
-COPY runtime/hub/frontend/packages/runtime-status /build/runtime/hub/frontend/packages/runtime-status
+COPY runtime/code-server/extensions/auplc-hub-link/package.json runtime/code-server/extensions/auplc-hub-link/package-lock.json ./
+COPY runtime/shared/runtime-status /build/runtime/shared/runtime-status
 COPY runtime/hub/frontend/tsconfig.base.json /build/runtime/hub/frontend/tsconfig.base.json
-RUN node -e 'const fs = require("fs"); const path = "/build/runtime/hub/frontend/packages/runtime-status/package.json"; const pkg = JSON.parse(fs.readFileSync(path, "utf8")); delete pkg.devDependencies; fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);'
+RUN node -e 'const fs = require("fs"); const path = "/build/runtime/shared/runtime-status/package.json"; const pkg = JSON.parse(fs.readFileSync(path, "utf8")); delete pkg.devDependencies; fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);'
 RUN if [ -n "${NPM_REGISTRY}" ]; then npm config set registry "${NPM_REGISTRY}"; fi && \
     npm ci --ignore-scripts --no-audit --no-fund --install-links
-RUN mkdir -p /build/runtime && ln -sfn /build/dockerfiles/Code/auplc-hub-link/node_modules /build/runtime/node_modules
+RUN mkdir -p /build/runtime && ln -sfn /build/runtime/code-server/extensions/auplc-hub-link/node_modules /build/runtime/node_modules
 
-COPY dockerfiles/Code/auplc-hub-link/src ./src
-COPY dockerfiles/Code/auplc-hub-link/README.md ./README.md
-COPY dockerfiles/Code/auplc-hub-link/LICENSE ./LICENSE
-COPY dockerfiles/Code/auplc-hub-link/tsconfig.json ./tsconfig.json
+COPY runtime/code-server/extensions/auplc-hub-link/src ./src
+COPY runtime/code-server/extensions/auplc-hub-link/README.md ./README.md
+COPY runtime/code-server/extensions/auplc-hub-link/LICENSE ./LICENSE
+COPY runtime/code-server/extensions/auplc-hub-link/tsconfig.json ./tsconfig.json
 RUN npm run package && \
     test -f auplc-hub-link-0.0.0.vsix
 
@@ -79,7 +79,7 @@ ENV PATH=/home/jovyan/.local/bin:/home/jovyan/.pixi/bin:${PATH}
 
 COPY dockerfiles/Code/extensions.txt /opt/auplc/extensions/extensions.txt
 COPY dockerfiles/Code/extensions/ /opt/auplc/extensions/local/
-COPY --from=hub-link-builder /build/dockerfiles/Code/auplc-hub-link/auplc-hub-link-0.0.0.vsix /opt/auplc/extensions/local/auplc-hub-link-0.0.0.vsix
+COPY --from=hub-link-builder /build/runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix /opt/auplc/extensions/local/auplc-hub-link-0.0.0.vsix
 COPY dockerfiles/Code/start-code-server.sh /usr/local/bin/start-code-server.sh
 
 RUN chmod +x /usr/local/bin/start-code-server.sh && \

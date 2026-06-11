@@ -44,22 +44,22 @@ ENV PATH="/opt/jupyter-build/bin:${PATH}"
 RUN corepack enable && corepack prepare pnpm@"${PNPM_VERSION}" --activate
 
 COPY runtime/hub/frontend/package.json runtime/hub/frontend/pnpm-lock.yaml runtime/hub/frontend/pnpm-workspace.yaml runtime/hub/frontend/tsconfig.base.json ./
-COPY runtime/hub/frontend/packages/runtime-status ./packages/runtime-status
-COPY runtime/hub/frontend/packages/jupyterlab-runtime-status ./packages/jupyterlab-runtime-status
+COPY runtime/shared/runtime-status /build/runtime/shared/runtime-status
+COPY runtime/notebook/jupyterlab-runtime-status /build/runtime/notebook/jupyterlab-runtime-status
 
 RUN rm -rf \
-    packages/runtime-status/node_modules \
-    packages/runtime-status/dist \
-    packages/jupyterlab-runtime-status/node_modules \
-    packages/jupyterlab-runtime-status/lib \
-    packages/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension
+    /build/runtime/shared/runtime-status/node_modules \
+    /build/runtime/shared/runtime-status/dist \
+    /build/runtime/notebook/jupyterlab-runtime-status/node_modules \
+    /build/runtime/notebook/jupyterlab-runtime-status/lib \
+    /build/runtime/notebook/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension
 
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi && \
     pnpm install --frozen-lockfile --filter @auplc/jupyterlab-runtime-status...
 
 RUN pnpm run build:notebook && \
-    test -f packages/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension/package.json && \
-    test -n "$(find packages/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension/static -name 'remoteEntry*.js' -print -quit)"
+    test -f /build/runtime/notebook/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension/package.json && \
+    test -n "$(find /build/runtime/notebook/jupyterlab-runtime-status/auplc_jupyterlab_runtime_status/labextension/static -name 'remoteEntry*.js' -print -quit)"
 
 # Build as jupyterhub/singleuser
 # Run with the DockerSpawner in JupyterHub
@@ -88,7 +88,7 @@ RUN if [ -n "$JUPYTERHUB_VERSION" ]; then python3 -mpip install --no-cache --upg
     ipywidgets=="$IPYWIDGETS_VERSION" \
     ipykernel=="$IPYKERNEL_VERSION"; fi
 
-COPY --from=runtime-status-builder --chown=1000:100 /build/runtime/hub/frontend/packages/jupyterlab-runtime-status /tmp/auplc-jupyterlab-runtime-status
+COPY --from=runtime-status-builder --chown=1000:100 /build/runtime/notebook/jupyterlab-runtime-status /tmp/auplc-jupyterlab-runtime-status
 
 RUN python3 -mpip install --no-cache-dir /tmp/auplc-jupyterlab-runtime-status && \
     rm -rf /tmp/auplc-jupyterlab-runtime-status
