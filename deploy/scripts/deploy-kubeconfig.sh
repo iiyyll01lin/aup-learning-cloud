@@ -27,6 +27,6 @@ IPS=(
 for IP in "${IPS[@]}"; do
     ssh "aup@$IP" "rm -r ~/.kube"
     ssh "aup@$IP" "mkdir -p ~/.kube"
-    scp yuzhou-kubeconfig.yaml "aup@$IP:/home/aup/.kube/config"
+    scp example-kubeconfig.yaml "aup@$IP:/home/aup/.kube/config"
     ssh "aup@$IP" "chown \$(id -u):\$(id -g) /home/aup/.kube/config"
 done
