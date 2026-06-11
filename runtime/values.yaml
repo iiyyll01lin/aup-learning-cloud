@@ -46,8 +46,8 @@ custom:
   # Authentication mode
   # - auto-login: No credentials required, auto-login as 'student' (for single-node dev)
   # - dummy: Accept any username/password (for testing)
-  # - github: GitHub OAuth authentication
-  # - multi: GitHub OAuth + Local accounts
+  # - github: GitHub App authentication
+  # - multi: GitHub App + Local accounts
   authMode: "auto-login"
 
   # Auto-create admin user on first install
@@ -136,7 +136,7 @@ custom:
   # Private repo access — two independent mechanisms (can be used together):
   #
   #   1. GitHub App (githubAppName)
-  #      For GitHub OAuth users. Users authorize per-repo read-only access via
+  #      For GitHub App users. Users authorize per-repo read-only access via
   #      the GitHub App UI. Token is obtained automatically from OAuth session.
   #      Requires migrating from OAuth App to GitHub App — see below.
   #
@@ -167,7 +167,7 @@ custom:
     # -- Private Repo Access --
     # GitHub App slug (e.g. "aup-learning-cloud")
     # Enables repo picker UI and automatic OAuth token usage for private repos.
-    # Only effective for GitHub OAuth users; auto-login/native users are unaffected.
+    # Only effective for GitHub App users; auto-login/native users are unaffected.
     githubAppName: ""
     # Default access token for private repos (e.g. a bot/service account PAT).
     # Works for ALL auth modes including auto-login — users don't need to know
@@ -463,7 +463,7 @@ hub:
     Authenticator:
       allow_all: true
 
-    # ---- GitHub OAuth ----
+    # ---- GitHub App ----
     GitHubOAuthenticator:
       oauth_callback_url: "https://<Your.domain>/hub/github/oauth_callback"
       app_id: ""

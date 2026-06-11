@@ -18,7 +18,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 # fullnameOverride and nameOverride distinguishes blank strings, null values,
 # and non-blank strings. For more details, see the configuration reference.
 fullnameOverride: ""
@@ -35,8 +34,8 @@ custom:
   # Authentication mode: "auto-login" | "dummy" | "github" | "multi"
   #   - auto-login: No credentials required, auto-login as 'student' (default, for single-node)
   #   - dummy: Accept any username/password (for testing)
-  #   - github: GitHub OAuth authentication
-  #   - multi: GitHub OAuth + Local accounts
+  #   - github: GitHub App authentication
+  #   - multi: GitHub App + Local accounts
   authMode: "auto-login"
 
   # Auto-create admin user on first install (optional)

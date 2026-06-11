@@ -3179,8 +3179,8 @@ properties:
 
           - `auto-login`: No credentials required, auto-login as 'student' (for demos/single-node)
           - `dummy`: Accept any username/password (for testing)
-          - `github`: GitHub OAuth authentication only
-          - `multi`: GitHub OAuth + Local native accounts (recommended for production)
+          - `github`: GitHub App authentication only
+          - `multi`: GitHub App + Local native accounts (recommended for production)
 
       adminUser:
         type: object

@@ -18,9 +18,9 @@
 # SOFTWARE.
 
 """
-GitHub OAuth Authenticator
+GitHub App Authenticator
 
-Custom GitHub OAuth authenticator with team integration support.
+Custom GitHub App authenticator with team integration support.
 Supports automatic token refresh for GitHub App user-to-server tokens.
 """
 
@@ -54,7 +54,7 @@ class _GitHubAppInstallCallbackHandler(OAuthCallbackHandler):
 
 
 class CustomGitHubOAuthenticator(GitHubOAuthenticator):
-    """GitHub OAuth authenticator with access token preservation and refresh."""
+    """GitHub App authenticator with access token preservation and refresh."""
 
     name = "github"
     callback_handler = _GitHubAppInstallCallbackHandler

@@ -160,9 +160,9 @@ AUP Learning Cloud
                 </form>
 
                 {% elif authenticator_mode == 'github' %}
-                <!-- GitHub OAuth Only -->
-                <!-- NOTE: Do NOT add "| urlencode" to OAuth links! JupyterHub already URL-escapes
-                     the "next" variable. OAuth stores next in a cookie as-is, so double-encoding
+                <!-- GitHub App Only -->
+                <!-- NOTE: Do NOT add "| urlencode" to App links! JupyterHub already URL-escapes
+                     the "next" variable. App stores next in a cookie as-is, so double-encoding
                      causes redirects to fail (e.g., /hub/%2Fhub%2F instead of /hub/).
                      Form POST actions DO need urlencode due to different browser/server handling. -->
                 <div class="mb-6">
@@ -176,8 +176,8 @@ AUP Learning Cloud
                 </div>
 
                 {% else %}
-                <!-- Multi Authenticator: GitHub OAuth + Native accounts -->
-                <!-- GitHub OAuth Button -->
+                <!-- Multi Authenticator: GitHub App + Native accounts -->
+                <!-- GitHub App Button -->
                 <!-- NOTE: Do NOT add "| urlencode" here - see comment above for explanation -->
                 <div class="mb-6">
                     <a href="{{ base_url }}github/oauth_login?next={{ next }}"
