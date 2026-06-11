@@ -27,22 +27,19 @@ FROM ${NODE_IMAGE} AS node-runtime
 FROM node-runtime AS hub-link-builder
 
 ARG NPM_REGISTRY=
-WORKDIR /build/runtime/code-server/extensions/auplc-hub-link
+ARG PNPM_VERSION=10.27.0
+WORKDIR /build/runtime
 
-COPY runtime/code-server/extensions/auplc-hub-link/package.json runtime/code-server/extensions/auplc-hub-link/package-lock.json ./
-COPY runtime/shared/runtime-status /build/runtime/shared/runtime-status
-COPY runtime/hub/frontend/tsconfig.base.json /build/runtime/hub/frontend/tsconfig.base.json
-RUN node -e 'const fs = require("fs"); const path = "/build/runtime/shared/runtime-status/package.json"; const pkg = JSON.parse(fs.readFileSync(path, "utf8")); delete pkg.devDependencies; fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);'
-RUN if [ -n "${NPM_REGISTRY}" ]; then npm config set registry "${NPM_REGISTRY}"; fi && \
-    npm ci --ignore-scripts --no-audit --no-fund --install-links
-RUN mkdir -p /build/runtime && ln -sfn /build/runtime/code-server/extensions/auplc-hub-link/node_modules /build/runtime/node_modules
-
-COPY runtime/code-server/extensions/auplc-hub-link/src ./src
-COPY runtime/code-server/extensions/auplc-hub-link/README.md ./README.md
-COPY runtime/code-server/extensions/auplc-hub-link/LICENSE ./LICENSE
-COPY runtime/code-server/extensions/auplc-hub-link/tsconfig.json ./tsconfig.json
-RUN npm run package && \
-    test -f auplc-hub-link-0.0.0.vsix
+RUN npm install -g pnpm@${PNPM_VERSION}
+COPY runtime/package.json runtime/pnpm-workspace.yaml runtime/pnpm-lock.yaml runtime/.npmrc ./
+COPY runtime/hub/frontend/tsconfig.base.json ./hub/frontend/tsconfig.base.json
+COPY runtime/shared/runtime-status ./shared/runtime-status
+COPY runtime/code-server/extensions/auplc-hub-link ./code-server/extensions/auplc-hub-link
+RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi && \
+    pnpm install --frozen-lockfile --prod=false --filter auplc-hub-link...
+RUN pnpm --filter @auplc/runtime-status run build && \
+    pnpm --filter auplc-hub-link run build && \
+    test -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
 
 FROM ${BASE_IMAGE}
 
