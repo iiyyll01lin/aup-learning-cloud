@@ -23,13 +23,13 @@ When metadata contains `AUPLC_RUNTIME_UNLIMITED=true`, the helper returns runtim
 
 ## Consumers
 
-`runtime/code-server/extensions/auplc-hub-link` consumes this helper through a local file dependency and keeps the finite VS Code display as `$(clock) Runtime: HH:MM:SS`.
+`runtime/code-server/extensions/auplc-hub-link` consumes this helper through the pnpm workspace and keeps the finite VS Code display as `$(clock) Runtime: HH:MM:SS`.
 
 `@auplc/jupyterlab-runtime-status` consumes the same helper after its Python server companion exposes same-origin safe runtime metadata to the frontend status item.
 
 ## Maintenance
 
-Run these commands from `runtime/hub/frontend`:
+Run these commands from `runtime`:
 
 ```bash
 pnpm --filter @auplc/runtime-status test

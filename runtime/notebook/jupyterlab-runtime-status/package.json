@@ -18,7 +18,7 @@
     "setup.py"
   ],
   "scripts": {
-    "build": "pnpm --dir ../../hub/frontend --filter @auplc/runtime-status build && tsc -p tsconfig.json && jupyter labextension build --development True .",
+    "build": "tsc -p tsconfig.json && jupyter labextension build --development True .",
     "test": "vitest run && PYTHONPATH=. pytest tests",
     "test:frontend": "vitest run",
     "test:server": "PYTHONPATH=. pytest tests",

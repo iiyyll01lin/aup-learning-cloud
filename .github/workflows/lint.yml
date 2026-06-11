@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: runtime/hub/frontend
+        working-directory: runtime
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +57,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: runtime/hub/frontend/pnpm-lock.yaml
+          cache-dependency-path: runtime/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install

@@ -79,7 +79,7 @@ ignore: |
   .git/
   .venv/
   dist/
-  runtime/hub/frontend/pnpm-lock.yaml
+  runtime/pnpm-lock.yaml
   # Helm templates use Go templating which isn't valid YAML
   runtime/chart/templates/
   # Generated files

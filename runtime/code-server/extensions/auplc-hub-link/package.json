@@ -29,13 +29,12 @@
     ]
   },
   "scripts": {
-    "precompile": "node_modules/.bin/tsc -p ../../../shared/runtime-status/tsconfig.esm.json && node_modules/.bin/tsc -p ../../../shared/runtime-status/tsconfig.cjs.json && node_modules/.bin/tsc -p ../../../shared/runtime-status/tsconfig.types.json && node ../../../shared/runtime-status/scripts/write-package-types.mjs",
     "compile": "tsc -p .",
-    "vscode:prepublish": "npm run compile",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "build": "tsc -p . && vsce package --no-dependencies"
   },
   "dependencies": {
-    "@auplc/runtime-status": "file:../../../shared/runtime-status"
+    "@auplc/runtime-status": "workspace:*"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",

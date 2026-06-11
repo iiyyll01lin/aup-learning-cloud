@@ -23,13 +23,13 @@ When metadata contains `AUPLC_RUNTIME_UNLIMITED=true`, the status item follows r
 
 ## Related Consumers
 
-VS Code support lives in `runtime/code-server/extensions/auplc-hub-link`. That extension consumes `@auplc/runtime-status` through a local file dependency and preserves the finite display as `$(clock) Runtime: HH:MM:SS`.
+VS Code support lives in `runtime/code-server/extensions/auplc-hub-link`. That extension consumes `@auplc/runtime-status` through the pnpm workspace and preserves the finite display as `$(clock) Runtime: HH:MM:SS`.
 
 The shared helper package has no UI or runtime dependencies. If this runtime display system needs to move outside the monorepo later, extract `@auplc/runtime-status` first, then keep this JupyterLab package as the notebook-specific consumer.
 
 ## Maintenance
 
-Run these commands from `runtime/hub/frontend`:
+Run these commands from `runtime`:
 
 ```bash
 pnpm --filter @auplc/jupyterlab-runtime-status build
