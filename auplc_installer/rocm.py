@@ -58,7 +58,7 @@ def _wait_daemonset_ready(name: str) -> None:
 
 
 def _patch_image_pull_policy(daemonset: str) -> None:
-    """For offline mode: avoid pulling the device plugin image from a registry."""
+    """Avoid pulling ROCm DaemonSet images when they already exist locally."""
     patch = '[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
     run(
         [
@@ -90,7 +90,6 @@ def deploy_rocm_gpu_device_plugin(*, offline_mode: bool, bundle_dir: Path | None
                     str(bundle_dir / "manifests/k8s-ds-amdgpu-dp.yaml"),
                 ]
             )
-            _patch_image_pull_policy("amdgpu-device-plugin-daemonset")
         else:
             url = (
                 "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/"
@@ -101,6 +100,7 @@ def deploy_rocm_gpu_device_plugin(*, offline_mode: bool, bundle_dir: Path | None
             verify_sha256(tmp, ROCM_DEVICE_PLUGIN_SHA256)
             run(["kubectl", "create", "-f", tmp])
             os.remove(tmp)
+        _patch_image_pull_policy("amdgpu-device-plugin-daemonset")
         _wait_daemonset_ready("amdgpu-device-plugin-daemonset")
         log("Successfully deployed ROCm GPU device plugin.")
 
@@ -128,7 +128,6 @@ def deploy_rocm_gpu_node_labeller(*, offline_mode: bool, bundle_dir: Path | None
                 str(bundle_dir / "manifests/k8s-ds-amdgpu-labeller.yaml"),
             ]
         )
-        _patch_image_pull_policy("amdgpu-labeller-daemonset")
     else:
         url = (
             "https://raw.githubusercontent.com/ROCm/k8s-device-plugin/"
@@ -140,5 +139,6 @@ def deploy_rocm_gpu_node_labeller(*, offline_mode: bool, bundle_dir: Path | None
         run(["kubectl", "create", "-f", tmp])
         os.remove(tmp)
 
+    _patch_image_pull_policy("amdgpu-labeller-daemonset")
     _wait_daemonset_ready("amdgpu-labeller-daemonset")
     log("Successfully deployed ROCm GPU node labeller.")
