@@ -8,11 +8,15 @@ systemd files that ``k3s.py`` writes by piping into ``tee`` (via
 ``run_pipe_text_to``):
 
   * ``dummy-interface.service`` — must rebuild dummy0 + its node IP on
-    every boot, idempotently (``ip addr replace``), after the network is
-    online, loading the ``dummy`` module first.
-  * ``k3s.service.d/10-auplc-autostart.conf`` — must order k3s after
-    ``docker.service`` + ``dummy-interface.service`` (``--docker`` installs
-    only; no-op for containerd).
+    every boot, idempotently (``ip addr replace``), ordered after
+    ``network-pre.target`` (NOT ``network-online.target``, which never
+    completes on an offline boot), loading the ``dummy`` module first.
+  * ``k3s.service.d/10-auplc-autostart.conf`` — always written (both
+    runtimes). It neutralizes the upstream ``network-online`` wait by
+    resetting ``Wants=``/``After=`` with empty assignments, then re-adds
+    only the ordering we need: after ``dummy-interface.service`` for
+    containerd, and after ``docker.service dummy-interface.service`` for
+    ``--docker``.
 
 These are pure string contracts, so we stub the subprocess wrappers in
 the ``auplc_installer.k3s`` namespace (the same "patch where it's looked
@@ -51,9 +55,11 @@ class SetupDummyInterfaceUnitTests(unittest.TestCase):
     @patch("auplc_installer.k3s.run_capture", return_value=_completed(0))
     @patch("auplc_installer.k3s.run", return_value=_completed())
     @patch("auplc_installer.k3s.run_pipe_text_to", return_value=0)
-    def test_orders_after_network_online(self, mock_pipe, _mock_run, _mock_capture) -> None:
+    def test_orders_after_network_pre_not_online(self, mock_pipe, _mock_run, _mock_capture) -> None:
         k3s.setup_dummy_interface()
-        self.assertIn("After=network-online.target", _tee_payload(mock_pipe, self._UNIT))
+        payload = _tee_payload(mock_pipe, self._UNIT)
+        self.assertNotIn("network-online.target", payload)
+        self.assertIn("After=network-pre.target", payload)
 
     @patch("auplc_installer.k3s.run_capture", return_value=_completed(0))
     @patch("auplc_installer.k3s.run", return_value=_completed())
@@ -80,17 +86,21 @@ class InstallK3sDropinsUnitTests(unittest.TestCase):
     @patch("auplc_installer.k3s.run_pipe_text_to", return_value=0)
     def test_docker_dropin_orders_k3s_after_docker_and_dummy(self, mock_pipe, _mock_run) -> None:
         k3s._install_k3s_dropins(use_docker=True)
-        self.assertIn(
-            "After=docker.service dummy-interface.service",
-            _tee_payload(mock_pipe, self._DROPIN),
-        )
+        payload = _tee_payload(mock_pipe, self._DROPIN)
+        self.assertIn("After=docker.service dummy-interface.service", payload)
+        # network-online wait neutralized via an empty Wants= reset line.
+        self.assertIn("Wants=\n", payload)
+        self.assertNotIn("network-online.target", payload)
 
-    @patch("auplc_installer.k3s.run")
+    @patch("auplc_installer.k3s.run", return_value=_completed())
     @patch("auplc_installer.k3s.run_pipe_text_to", return_value=0)
-    def test_noop_in_containerd_mode(self, mock_pipe, mock_run) -> None:
+    def test_containerd_dropin_orders_k3s_after_dummy(self, mock_pipe, _mock_run) -> None:
         k3s._install_k3s_dropins(use_docker=False)
-        mock_pipe.assert_not_called()
-        mock_run.assert_not_called()
+        payload = _tee_payload(mock_pipe, self._DROPIN)
+        self.assertIn("After=dummy-interface.service", payload)
+        # network-online wait neutralized via an empty Wants= reset line.
+        self.assertIn("Wants=\n", payload)
+        self.assertNotIn("network-online.target", payload)
 
 
 if __name__ == "__main__":

@@ -153,8 +153,7 @@ def setup_dummy_interface() -> None:
         "[Unit]\n"
         "Description=Setup dummy network interface for K3s portable operation\n"
         "Before=k3s.service\n"
-        "After=network-online.target\n"
-        "Wants=network-online.target\n\n"
+        "After=network-pre.target\n\n"
         "[Service]\n"
         "Type=oneshot\n"
         "RemainAfterExit=yes\n"
@@ -263,22 +262,34 @@ def install_k3s_single_node(
 
 
 def _install_k3s_dropins(*, use_docker: bool) -> None:
-    """Add a k3s systemd drop-in so it auto-starts after reboot (docker mode).
+    """Add a k3s systemd drop-in so it auto-starts after reboot (both runtimes).
 
-    The upstream k3s unit from get.k3s.io has no ordering dependency on
-    ``docker.service`` (nor on our ``dummy-interface.service``), so on a
-    ``--docker`` install k3s can start before dockerd/dummy0 are ready and
-    crash-loop. The drop-in adds that ordering and we enable docker so it
-    comes up on boot too. No-op in containerd mode.
+    The upstream k3s unit from get.k3s.io waits on ``network-online.target``,
+    which never completes on an offline boot, so k3s never starts. Its main
+    purpose is to neutralize that wait by resetting ``Wants=``/``After=`` with
+    empty assignments, then re-adding only the ordering we actually need so k3s
+    starts on offline boots. In containerd mode we order after our
+    ``dummy-interface.service``; in ``--docker`` mode we also order after
+    ``docker.service`` (and enable docker so it comes up on boot too), since
+    otherwise k3s can start before dockerd/dummy0 are ready and crash-loop.
     """
-    if not use_docker:
-        return
     run(["mkdir", "-p", "/etc/systemd/system/k3s.service.d"], sudo=True)
-    content = (
-        "[Unit]\n"
-        "After=docker.service dummy-interface.service\n"
-        "Wants=docker.service dummy-interface.service\n"
-    )
+    if use_docker:
+        content = (
+            "[Unit]\n"
+            "Wants=\n"
+            "After=\n"
+            "After=docker.service dummy-interface.service\n"
+            "Wants=docker.service dummy-interface.service\n"
+        )
+    else:
+        content = (
+            "[Unit]\n"
+            "Wants=\n"
+            "After=\n"
+            "After=dummy-interface.service\n"
+            "Wants=dummy-interface.service\n"
+        )
     rc = run_pipe_text_to(
         ["tee", "/etc/systemd/system/k3s.service.d/10-auplc-autostart.conf"],
         input_text=content,
@@ -287,7 +298,8 @@ def _install_k3s_dropins(*, use_docker: bool) -> None:
     if rc != 0:
         raise InstallerError("Failed to write k3s autostart drop-in")
     run(["systemctl", "daemon-reload"], sudo=True)
-    run(["systemctl", "enable", "docker"], sudo=True, check=False)
+    if use_docker:
+        run(["systemctl", "enable", "docker"], sudo=True, check=False)
 
 
 def _configure_kubeconfig() -> None:

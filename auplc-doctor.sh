@@ -28,6 +28,8 @@ for svc in dummy-interface.service docker.service k3s.service; do
   echo "  $svc: enabled=$(systemctl is-enabled "$svc" 2>/dev/null || echo missing) active=$(systemctl is-active "$svc" 2>/dev/null || echo inactive)"
 done
 [ "$DOCKER_MODE" = 1 ] && { [ -f "$DROPIN" ] && ok "k3s docker-ordering drop-in present" || warn "no k3s docker-ordering drop-in"; }
+systemctl show k3s.service -p After --value 2>/dev/null | grep -q network-online.target && warn "k3s still ordered After network-online.target (will hang on offline boot)" || ok "k3s not waiting on network-online"
+for wsvc in NetworkManager-wait-online.service systemd-networkd-wait-online.service; do echo "  $wsvc: enabled=$(systemctl is-enabled "$wsvc" 2>/dev/null || echo missing)"; done
 echo "  recent k3s log:"; journalctl -u k3s -b --no-pager 2>/dev/null | tail -n 15 | sed 's/^/    /'
 kubectl get nodes 2>&1 | sed 's/^/  nodes: /'
 [ "$MODE" = check ] && { echo "--- check mode: no changes ---"; exit 0; }
@@ -38,8 +40,7 @@ cat > "$DUMMY_UNIT" <<EOF
 [Unit]
 Description=Setup dummy network interface for K3s portable operation
 Before=k3s.service
-After=network-online.target
-Wants=network-online.target
+After=network-pre.target
 
 [Service]
 Type=oneshot
@@ -52,11 +53,14 @@ ExecStop=/bin/bash -c 'ip link del dummy0 2>/dev/null || true'
 WantedBy=multi-user.target
 EOF
 act "rewrote $DUMMY_UNIT (idempotent IP via 'ip addr replace' + modprobe dummy)"
+mkdir -p "$(dirname "$DROPIN")"
 if [ "$DOCKER_MODE" = 1 ]; then
   systemctl enable docker 2>/dev/null || true
-  mkdir -p "$(dirname "$DROPIN")"
-  printf '[Unit]\nAfter=docker.service dummy-interface.service\nWants=docker.service dummy-interface.service\n' > "$DROPIN"
-  act "wrote $DROPIN (k3s waits for docker + dummy0)"
+  printf '[Unit]\nWants=\nAfter=\nAfter=docker.service dummy-interface.service\nWants=docker.service dummy-interface.service\n' > "$DROPIN"
+  act "wrote $DROPIN (reset network-online wait; k3s waits for docker + dummy0)"
+else
+  printf '[Unit]\nWants=\nAfter=\nAfter=dummy-interface.service\nWants=dummy-interface.service\n' > "$DROPIN"
+  act "wrote $DROPIN (reset network-online wait; k3s waits for dummy0)"
 fi
 systemctl daemon-reload
 systemctl enable dummy-interface.service k3s 2>/dev/null || true
