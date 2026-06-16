@@ -19,7 +19,7 @@
 
 nfs:
   server: <Your-Server-hostname>
-  path: <Your-Server-path>
+  path: /nfs
 
 storageClass:
   name: nfs-client
