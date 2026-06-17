@@ -972,9 +972,7 @@ class ResourcesAPIHandler(APIHandler):
         # keep the legacy alphabetical order with low-priority groups last.
         BOTTOM_GROUPS = {"OTHERS", "CUSTOM REPO"}
         groups_list = []
-        configured_group_order = {
-            group_name: index for index, group_name in enumerate(config.resources.groupOrder)
-        }
+        configured_group_order = {group_name: index for index, group_name in enumerate(config.resources.groupOrder)}
 
         def group_sort_key(group_name: str) -> tuple[int, int, bool, str]:
             if group_name in configured_group_order:
