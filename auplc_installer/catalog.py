@@ -45,8 +45,8 @@ class Course:
 COURSE_CATALOG: tuple[Course, ...] = (
     Course("cpu", "auplc-default", False, "base-cpu", "Base CPU (Python Base Environment)"),
     Course("gpu", "auplc-base", True, "base-rocm", "Base GPU (GPU Base Environment)"),
-    Course("code-cpu", "auplc-code-cpu", False, "code-cpu", "Code Server CPU Environment"),
-    Course("code-gpu", "auplc-code-gpu", True, "code-gpu", "Code Server GPU Environment"),
+    Course("code-cpu", "auplc-code-cpu", False, "code-cpu", "VSCode Server CPU Environment"),
+    Course("code-gpu", "auplc-code-gpu", True, "code-gpu", "VSCode Server GPU Environment"),
     Course("Course-CV", "auplc-cv", True, "cv", "Computer Vision Course"),
     Course("Course-DL", "auplc-dl", True, "dl", "Deep Learning Course"),
     Course("Course-LLM", "auplc-llm", True, "llm", "Large Language Model Course"),

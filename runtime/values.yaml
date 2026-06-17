@@ -303,7 +303,7 @@ custom:
         resourceType: "notebook"
       code-cpu:
         group: "DEVELOPMENT"
-        description: "Code Server CPU Environment"
+        description: "VSCode Server CPU Environment"
         subDescription: "CPU-only development workspace"
         accelerator: ""
         acceleratorKeys: []
@@ -321,7 +321,7 @@ custom:
         resourceType: "notebook"
       code-gpu:
         group: "DEVELOPMENT"
-        description: "Code Server GPU Environment"
+        description: "VSCode Server GPU Environment"
         subDescription: "GPU-accelerated development workspace"
         accelerator: "GPU"
         acceleratorKeys:
