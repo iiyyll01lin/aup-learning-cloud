@@ -968,10 +968,20 @@ class ResourcesAPIHandler(APIHandler):
                 groups_dict[group_name] = []
             groups_dict[group_name].append(resource_data)
 
-        # Build groups list - sort alphabetically, but put CUSTOM REPO last
+        # Build groups list. Configured groups come first; unspecified groups
+        # keep the legacy alphabetical order with low-priority groups last.
         BOTTOM_GROUPS = {"OTHERS", "CUSTOM REPO"}
         groups_list = []
-        sorted_group_names = sorted(groups_dict.keys(), key=lambda x: (x in BOTTOM_GROUPS, x))
+        configured_group_order = {
+            group_name: index for index, group_name in enumerate(config.resources.groupOrder)
+        }
+
+        def group_sort_key(group_name: str) -> tuple[int, int, bool, str]:
+            if group_name in configured_group_order:
+                return (0, configured_group_order[group_name], False, group_name)
+            return (1, 0, group_name in BOTTOM_GROUPS, group_name)
+
+        sorted_group_names = sorted(groups_dict.keys(), key=group_sort_key)
         for group_name in sorted_group_names:
             groups_list.append(
                 {

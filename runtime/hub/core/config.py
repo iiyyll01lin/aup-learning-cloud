@@ -117,6 +117,7 @@ class ResourcesConfig(BaseModel):
     images: dict[str, str] = Field(default_factory=dict)
     requirements: dict[str, ResourceRequirements] = Field(default_factory=dict)
     metadata: dict[str, ResourceMetadata] = Field(default_factory=dict)
+    groupOrder: list[str] = Field(default_factory=list)
 
     model_config = {"extra": "allow"}
 
