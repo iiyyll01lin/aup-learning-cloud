@@ -197,6 +197,8 @@ custom:
       Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
       Course-LLM: "ghcr.io/amdresearch/auplc-llm:latest"
       Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
+      code-cpu: "ghcr.io/amdresearch/auplc-code-cpu:latest"
+      code-gpu: "ghcr.io/amdresearch/auplc-code-gpu:latest"
 
     requirements:
       cpu:
@@ -222,6 +224,13 @@ custom:
         cpu: "0"
         memory: "0Gi"
         amd.com/gpu: "1"
+      code-cpu:
+        cpu: "0"
+        memory: "0Gi"
+      code-gpu:
+        cpu: "0"
+        memory: "0Gi"
+        amd.com/gpu: "1"
       none:
         cpu: "0"
         memory: "0Gi"
@@ -234,6 +243,16 @@ custom:
         accelerator: ""
         acceleratorKeys: []
         allowGitClone: true
+        resourceType: "notebook"
+      code-cpu:
+        group: "DEVELOPMENT"
+        description: "VSCode Server CPU Environment"
+        subDescription: "CPU-only development workspace"
+        accelerator: ""
+        acceleratorKeys: []
+        allowGitClone: true
+        launchMode: "code-server"
+        resourceType: "browser-ide"
       gpu:
         group: "CUSTOM REPO"
         description: "Basic GPU Environment"
@@ -242,6 +261,17 @@ custom:
         acceleratorKeys:
           - strix-halo
         allowGitClone: true
+        resourceType: "notebook"
+      code-gpu:
+        group: "DEVELOPMENT"
+        description: "VSCode Server GPU Environment"
+        subDescription: "GPU-accelerated development workspace"
+        accelerator: "GPU"
+        acceleratorKeys:
+          - strix-halo
+        allowGitClone: true
+        launchMode: "code-server"
+        resourceType: "browser-ide"
       Course-CV:
         group: "COURSE"
         description: "Computer Vision Course"
@@ -249,6 +279,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
         # acceleratorOverrides: (optional) per-accelerator image and env overrides
         # Use this when one course is available on multiple GPU targets with
         # different image tags.
@@ -265,6 +296,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
       Course-LLM:
         group: "COURSE"
         description: "Large Language Models Course"
@@ -272,6 +304,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
       Course-PhySim:
         group: "COURSE"
         description: "Genesis Physical Simulation Course"
@@ -279,6 +312,7 @@ custom:
         accelerator: "GPU"
         acceleratorKeys:
           - strix-halo
+        resourceType: "notebook"
 
   # --------------------------------------------------------------------------
   # Team Permission Configuration
@@ -287,7 +321,9 @@ custom:
     mapping:
       cpu:
         - cpu
+        - code-cpu
       gpu:
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -295,6 +331,8 @@ custom:
       official:
         - cpu
         - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -305,15 +343,19 @@ custom:
         - Course-LLM
         - Course-PhySim
       native-users:
+        - cpu
+        - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
         - Course-PhySim
-        - cpu
-        - gpu
       github-users:
         - cpu
         - gpu
+        - code-cpu
+        - code-gpu
         - Course-CV
         - Course-DL
         - Course-LLM
@@ -498,6 +540,12 @@ prePuller:
       tag: latest
     auplc-physim:
       name: ghcr.io/amdresearch/auplc-physim
+      tag: latest
+    auplc-code-cpu:
+      name: ghcr.io/amdresearch/auplc-code-cpu
+      tag: latest
+    auplc-code-gpu:
+      name: ghcr.io/amdresearch/auplc-code-gpu
       tag: latest
     auplc-hub:
       name: ghcr.io/amdresearch/auplc-hub
