@@ -39,7 +39,7 @@ RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"
     pnpm install --frozen-lockfile --prod=false --filter auplc-hub-link...
 RUN pnpm --filter @auplc/runtime-status run build && \
     pnpm --filter auplc-hub-link run build && \
-    test -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+    test -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.1.vsix
 
 FROM ${BASE_IMAGE}
 
@@ -76,7 +76,7 @@ ENV PATH=/home/jovyan/.local/bin:/home/jovyan/.pixi/bin:${PATH}
 
 COPY dockerfiles/Code/extensions.txt /opt/auplc/extensions/extensions.txt
 COPY dockerfiles/Code/extensions/ /opt/auplc/extensions/local/
-COPY --from=hub-link-builder /build/runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix /opt/auplc/extensions/local/auplc-hub-link-0.0.0.vsix
+COPY --from=hub-link-builder /build/runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.1.vsix /opt/auplc/extensions/local/auplc-hub-link-0.0.1.vsix
 COPY dockerfiles/Code/start-code-server.sh /usr/local/bin/start-code-server.sh
 
 RUN chmod +x /usr/local/bin/start-code-server.sh && \

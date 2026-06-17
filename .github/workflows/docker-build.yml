@@ -319,17 +319,18 @@ jobs:
         working-directory: runtime
         run: |
           pnpm install --frozen-lockfile --filter auplc-hub-link...
-          rm -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          rm -f code-server/extensions/auplc-hub-link/auplc-hub-link-*.vsix
+          HUB_LINK_VERSION=$(node -p "require('./code-server/extensions/auplc-hub-link/package.json').version")
           pnpm --filter @auplc/runtime-status run build
           pnpm --filter auplc-hub-link run build
-          test -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          test -f "code-server/extensions/auplc-hub-link/auplc-hub-link-${HUB_LINK_VERSION}.vsix"
 
       - name: Clean Hub link build artifacts
         if: always()
         run: |
           rm -rf runtime/code-server/extensions/auplc-hub-link/node_modules
           rm -rf runtime/code-server/extensions/auplc-hub-link/out
-          rm -rf runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          rm -f runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-*.vsix
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -491,17 +492,18 @@ jobs:
         working-directory: runtime
         run: |
           pnpm install --frozen-lockfile --filter auplc-hub-link...
-          rm -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          rm -f code-server/extensions/auplc-hub-link/auplc-hub-link-*.vsix
+          HUB_LINK_VERSION=$(node -p "require('./code-server/extensions/auplc-hub-link/package.json').version")
           pnpm --filter @auplc/runtime-status run build
           pnpm --filter auplc-hub-link run build
-          test -f code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          test -f "code-server/extensions/auplc-hub-link/auplc-hub-link-${HUB_LINK_VERSION}.vsix"
 
       - name: Clean Hub link build artifacts
         if: always()
         run: |
           rm -rf runtime/code-server/extensions/auplc-hub-link/node_modules
           rm -rf runtime/code-server/extensions/auplc-hub-link/out
-          rm -rf runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-0.0.0.vsix
+          rm -f runtime/code-server/extensions/auplc-hub-link/auplc-hub-link-*.vsix
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
