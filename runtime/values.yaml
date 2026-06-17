@@ -253,6 +253,14 @@ custom:
       Course-PhySim: "ghcr.io/amdresearch/auplc-physim:latest"
       # Custom-URL: "ghcr.io/amdresearch/auplc-cv:latest"
 
+    # Optional spawn/Home group display order. Groups not listed here are shown
+    # after these entries using the default alphabetical order.
+    # Example: move DEVELOPMENT before COURSE by listing DEVELOPMENT first.
+    groupOrder:
+      - COURSE
+      - DEVELOPMENT
+      - CUSTOM REPO
+
     # Course Resource Requirements
     # Define resource quotas for each course
     requirements:

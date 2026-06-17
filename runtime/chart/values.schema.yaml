@@ -3368,6 +3368,22 @@ properties:
                 cpu: "ghcr.io/amdresearch/auplc-default:latest"
                 Course-DL: "ghcr.io/amdresearch/auplc-dl:latest"
               ```
+          groupOrder:
+            type: array
+            items:
+              type: string
+            description: |
+              Optional display order for resource groups in the Home and Spawn UI.
+              Groups listed here are shown first in the given order. Groups not
+              listed here keep the default ordering.
+
+              Example:
+              ```yaml
+              groupOrder:
+                - DEVELOPMENT
+                - COURSE
+                - CUSTOM REPO
+              ```
           requirements:
             type: object
             additionalProperties:
