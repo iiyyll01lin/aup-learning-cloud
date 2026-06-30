@@ -6,6 +6,8 @@
 #            APU=1/0 force/skip the Ryzen AI OEM-kernel step (default: auto-detect;
 #            Radeon dGPUs use the stock Ubuntu kernel and skip it).
 #            STRICT=1 aborts if any prerequisite check fails; SKIP_CHECKS=1 skips them.
+#            FIX_GPU=1 auto-upgrades the host amdgpu driver to the required baseline
+#            (>= 31.30) when it is too old, instead of stopping with instructions.
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/AMDResearch/aup-learning-cloud.git}"
@@ -23,7 +25,7 @@ LOG="/var/log/auplc-demo-setup.log"
 RESUME_UNIT="auplc-demo-resume.service"
 
 # --- escalate to root (keeps SUDO_USER so kubeconfig lands in the real user's home) ---
-if [ "$(id -u)" -ne 0 ]; then exec sudo -E IMAGE_TAG="$IMAGE_TAG" ADMIN="$ADMIN" OEM_KERNEL_PKG="$OEM_KERNEL_PKG" REPO_URL="$REPO_URL" bash "$0" "$@"; fi
+if [ "$(id -u)" -ne 0 ]; then exec sudo -E IMAGE_TAG="$IMAGE_TAG" ADMIN="$ADMIN" OEM_KERNEL_PKG="$OEM_KERNEL_PKG" REPO_URL="$REPO_URL" FIX_GPU="${FIX_GPU:-0}" bash "$0" "$@"; fi
 
 SELF="$(readlink -f "$0")"
 REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || echo root)}"
@@ -170,6 +172,69 @@ is_apu() {
   return 0
 }
 
+# True when any AMD GPU is present (so the ROCm driver baseline is relevant).
+have_amd_gpu() {
+  command -v lspci >/dev/null 2>&1 || return 1
+  lspci -nn 2>/dev/null | grep -Ei 'vga|display|3d controller' | grep -qiE 'amd|ati'
+}
+
+# Schedule the post-reboot auto-resume unit and reboot. Shared by the OEM-kernel
+# install and the amdgpu driver upgrade so both ride a single reboot. Exits.
+schedule_resume_and_reboot() {
+  local reason="${1:-Changes applied}"
+  echo "await-install" > "$STATE_FILE"
+  cat >/etc/systemd/system/$RESUME_UNIT <<EOF
+[Unit]
+Description=Resume AUP Learning Cloud demo install after reboot
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=IMAGE_TAG=$IMAGE_TAG
+Environment=ADMIN=$ADMIN
+ExecStart=/usr/bin/env SUDO_USER=$REAL_USER /bin/bash $SELF --resume
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable "$RESUME_UNIT"
+  echo "$reason. Rebooting; install will continue automatically."
+  echo "Watch: sudo journalctl -u $RESUME_UNIT -f   (or tail -f $LOG)"
+  sleep 3; reboot; exit 0
+}
+
+# Enforce the AMD GPU driver baseline (auplc-gpu-doctor.sh is the source of truth
+# for the required release). Default: STOP if the driver is too old. FIX_GPU=1:
+# auto-upgrade (a reboot is then required and is handled by the caller). Returns
+# 0 when a fix was applied (caller must reboot), 1 otherwise. Skipped when no AMD
+# GPU is present or SKIP_CHECKS=1.
+gpu_driver_gate() {
+  [ "${SKIP_CHECKS:-0}" = "1" ] && return 1
+  have_amd_gpu || { echo "No AMD GPU detected; skipping amdgpu driver baseline gate."; return 1; }
+  [ -f "$REPO_DIR/auplc-gpu-doctor.sh" ] || { echo "WARN: auplc-gpu-doctor.sh missing; cannot verify amdgpu driver baseline."; return 1; }
+
+  if timeout 60 bash "$REPO_DIR/auplc-gpu-doctor.sh" --check >/dev/null 2>&1; then
+    echo "amdgpu driver baseline OK (>= 31.30)."
+    return 1
+  fi
+
+  if [ "${FIX_GPU:-0}" = "1" ]; then
+    echo "FIX_GPU=1: amdgpu driver below baseline — upgrading via auplc-gpu-doctor.sh --fix ..."
+    bash "$REPO_DIR/auplc-gpu-doctor.sh" --fix || { echo "ERROR: amdgpu driver --fix failed. Fix manually then re-run."; exit 1; }
+    return 0
+  fi
+
+  echo "ERROR: host amdgpu driver is below the required baseline (31.30)."
+  echo "       GPU notebooks will page-fault until this is fixed. Choose one:"
+  echo "         sudo FIX_GPU=1 ./demo-setup.sh                    # auto-upgrade the driver, then continue"
+  echo "         sudo ./auplc-gpu-doctor.sh --fix && sudo reboot   # fix manually, then re-run"
+  echo "         SKIP_CHECKS=1 sudo ./demo-setup.sh                # bypass (NOT recommended for GPU demos)"
+  exit 1
+}
+
 # --- locate the repo (use the one beside this script, else clone into the user's home) ---
 if [ -x "$(dirname "$SELF")/auplc-installer" ]; then
   REPO_DIR="$(dirname "$SELF")"
@@ -189,6 +254,13 @@ if [ "$MODE" = "prereq" ]; then
   usermod -aG docker "$REAL_USER" || true
 
   preflight_checks
+
+  # AMD GPU driver baseline gate: STOP if the host amdgpu driver is too old for
+  # ROCm/gfx1151 (the root cause of GPU page faults). FIX_GPU=1 auto-upgrades it
+  # and rides the same reboot as the OEM-kernel step below.
+  GPU_REBOOT_NEEDED=0
+  if gpu_driver_gate; then GPU_REBOOT_NEEDED=1; fi
+
   if ! is_apu; then
     echo "Radeon dGPU detected (or APU=0); stock Ubuntu kernel is fine — skipping OEM kernel install + reboot."
   elif [ "$(uname -r)" = "$OEM_KERNEL_REL" ]; then
@@ -203,29 +275,12 @@ if [ "$MODE" = "prereq" ]; then
       || { echo "ERROR: $OEM_KERNEL_PKG not available in apt sources; set OEM_KERNEL_PKG=... or APU=0."; exit 1; }
     apt-get install -y "$OEM_KERNEL_PKG"
     force_default_kernel "$OEM_KERNEL_REL"
-    echo "await-install" > "$STATE_FILE"
-    cat >/etc/systemd/system/$RESUME_UNIT <<EOF
-[Unit]
-Description=Resume AUP Learning Cloud demo install after reboot
-After=network-online.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-Environment=IMAGE_TAG=$IMAGE_TAG
-Environment=ADMIN=$ADMIN
-ExecStart=/usr/bin/env SUDO_USER=$REAL_USER /bin/bash $SELF --resume
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-    systemctl enable "$RESUME_UNIT"
-    echo "OEM kernel installed and pinned as GRUB default. Rebooting; install will continue automatically."
-    echo "Watch: sudo journalctl -u $RESUME_UNIT -f   (or tail -f $LOG)"
-    sleep 3; reboot; exit 0
+    schedule_resume_and_reboot "OEM kernel installed and pinned as GRUB default"
   fi
+
+  # Driver-only reboot: if FIX_GPU upgraded the amdgpu driver but the kernel was
+  # already correct (no kernel reboot above), reboot now so the new module loads.
+  [ "${GPU_REBOOT_NEEDED:-0}" = "1" ] && schedule_resume_and_reboot "amdgpu driver upgraded to baseline 31.30"
 fi
 
 # --- install phase (fresh, or auto-resumed after reboot) ---
