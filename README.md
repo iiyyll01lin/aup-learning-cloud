@@ -66,6 +66,18 @@ sudo apt install python3-questionary python3-prompt-toolkit
 >
 > **TUI note**: **System Python (apt):** install `python3-questionary` and `python3-prompt-toolkit` as shown above. **Conda or virtualenv users:** use `pip install questionary prompt_toolkit` inside your active environment instead of the apt packages. These are required for the interactive TUI; non-interactive `./auplc-installer install` does not need them.
 
+### One-click demo (optional)
+
+`./demo-setup.sh` bootstraps everything (prerequisites, OEM kernel on Ryzen AI APUs, install, auto-resume after reboot). It runs preflight checks for Ubuntu 24.04, x86_64, 32GB+ RAM, 500GB+ disk, AMD GPU and internet, and is controlled by env flags:
+
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `ADMIN` | `1` | Grant the auto-login `student` user JupyterHub admin (`0` to opt out). |
+| `APU` | auto | `1`/`0` force/skip the Ryzen AI OEM-kernel step (Radeon dGPUs skip it). |
+| `OEM_KERNEL_PKG` | `linux-image-6.14.0-1018-oem` | OEM kernel package to enforce on APUs. |
+| `STRICT` | `0` | Abort if any prerequisite check fails (default warns and continues). |
+| `SKIP_CHECKS` | `0` | Skip the preflight checks entirely. |
+
 ### Installation
 
 **Interactive (recommended):**
