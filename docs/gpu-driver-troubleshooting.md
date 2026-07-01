@@ -214,14 +214,39 @@ The required release is defined once at the top of the script
 
 ## 8. Notes / FAQ · 補充說明
 
-**Does Ubuntu bundle this amdgpu driver? · Ubuntu 會內建這個 amdgpu 驅動嗎?**
-Ubuntu ships the **in-tree** `amdgpu` kernel module (enough for display), but the
-**ROCm `amdgpu-dkms`** (30.30 / 31.30 from `repo.radeon.com`) is installed
-separately and is what gfx1151 + ROCm compute needs. The reported `6.16.13 /
-6.19.4` versions are DKMS (out-of-tree).
-Ubuntu 內建的是**內核內建版** `amdgpu`（夠亮畫面），但 **ROCm 的 `amdgpu-dkms`**
-（來自 `repo.radeon.com` 的 30.30 / 31.30）要另外裝，才是 gfx1151 + ROCm 計算所需。
-看到的 `6.16.13 / 6.19.4` 都是 DKMS（out-of-tree）版本。
+**Two kinds of `amdgpu` — know the difference · 兩種 amdgpu，要分清楚**
+
+| | in-tree (kernel built-in) · 內核內建 | `amdgpu-dkms` (AMD out-of-tree) · AMD 套件版 |
+|---|---|---|
+| From · 來源 | Ubuntu `linux-image-*` | `repo.radeon.com` via `amdgpu-install`, built by DKMS |
+| Version · 版本 | tracks the kernel · 隨 kernel | AMD release: 30.30→mod 6.16.13, 31.30→mod 6.19.4 |
+| For · 用途 | display + basic GPU · 顯示 + 基本 GPU | **ROCm compute + new chips (gfx1151)** · ROCm 計算 + 新晶片 |
+| Which wins · 誰生效 | overridden by DKMS · 被覆蓋 | **overrides in-tree, this is what loads** · 覆蓋內建、實際載入的是它 |
+| This incident · 本次 | fine · 沒問題 | **stuck at old 30.30 = root cause** · 停在舊的 30.30 = 病根 |
+
+`cat /sys/module/amdgpu/version` shows the DKMS version actually loaded (e.g. `6.19.4`).
+· `cat /sys/module/amdgpu/version` 看到的就是實際載入的 DKMS 版本。
+
+**`amdgpu-dkms` must line up with THREE things · DKMS 驅動要同時對上三個東西:**
+
+1. **Kernel** — DKMS must be able to *build* for it (a support range; it recompiles per
+   kernel). amdgpu 31.30 builds for both 6.14.0-oem and 6.17.0-oem. · 要能對該 kernel
+   **編譯**得起來（支援範圍，每個 kernel 各編一次）；31.30 對 6.14 與 6.17 都能編。
+2. **Container ROCm** — driver ≥ what the ROCm userspace needs (31.30 ↔ ROCm 7.13). ·
+   驅動 ≥ 容器 ROCm 需要的版本（31.30 ↔ ROCm 7.13）。
+3. **The GPU chip** — must support it (gfx1151); 30.30 was buggy for its command
+   processor. · 要支援該晶片（gfx1151）；30.30 對它的 CP 有問題。
+
+So kernel **6.17.0-1025-oem** pairs with amdgpu **31.30** (same driver as 6.14 — already
+DKMS-`installed` for it). We still pin **6.14** because it is the platform-*validated*
+kernel (whole k3s stack tested); 6.17 is drift, **not** GPU-broken. · 所以 kernel **6.17**
+配的就是 amdgpu **31.30**（跟 6.14 同版、已 installed）。仍釘 6.14 是因為它是平台**驗證過**的
+kernel，6.17 只是漂移、不是 GPU 壞。
+
+**Failure mode to avoid · 要避開的失敗模式:** if the kernel jumps to a version the (held)
+amdgpu can't build for, DKMS fails → no GPU. Holding 31.30 + a kernel it supports = safe.
+· 若 kernel 跳到被 hold 的 amdgpu 編不出來的版本，DKMS 失敗 → GPU 掛；鎖 31.30 + 它支援的
+kernel = 安全。
 
 **Is `demo-setup.sh` the cause? · 是 `demo-setup.sh` 造成的嗎?**
 No. `demo-setup.sh` and `auplc_installer/` install the OEM kernel + k3s/helm +
