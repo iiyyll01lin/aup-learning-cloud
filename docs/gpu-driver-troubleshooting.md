@@ -184,6 +184,15 @@ sudo ./demo-setup.sh             # stops early if the driver is too old
 sudo FIX_GPU=1 ./demo-setup.sh   # auto-upgrade the driver, reboot, and continue
 ```
 
+**After a successful install, lock the working stack in place** (opt-in — the
+kernel/driver holds block updates until `--unpin`) · **裝好後把可用的組合鎖住**
+（選用；kernel/驅動 hold 會擋更新，直到 `--unpin`）:
+
+```bash
+sudo ./auplc-gpu-doctor.sh --pin     # hold driver at baseline + pin the boot kernel
+sudo ./auplc-gpu-doctor.sh --unpin   # revert anytime · 隨時可解
+```
+
 ---
 
 ## 7. Tool reference · 工具參考: `auplc-gpu-doctor.sh`
