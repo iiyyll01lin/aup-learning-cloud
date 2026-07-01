@@ -116,12 +116,19 @@ info "amdgpu release: ${REL} (module ${SYS_VER}); required >= ${REQUIRED_RELEASE
 
 NEED_FIX=0
 
-# DKMS module present for the running kernel?
+# DKMS module present for the RUNNING kernel? Use `dkms status` (no positional
+# arg, which some DKMS versions reject) and match the running kernel, so a
+# just-rebooted, mid-autoinstall state is reported accurately instead of a
+# blanket "not installed" false alarm.
 if command -v dkms >/dev/null 2>&1; then
-  if dkms status amdgpu 2>/dev/null | grep -q "installed"; then
-    ok "amdgpu DKMS module is built/installed"
+  krel="$(uname -r)"
+  dkms_amdgpu="$(dkms status 2>/dev/null | grep -i amdgpu)"
+  if printf '%s\n' "$dkms_amdgpu" | grep -F "$krel" | grep -qi installed; then
+    ok "amdgpu DKMS module installed for $krel"
+  elif printf '%s\n' "$dkms_amdgpu" | grep -qi installed; then
+    warn "amdgpu DKMS installed, but not yet for running kernel $krel (autoinstall may still be building)"
   else
-    warn "amdgpu DKMS module not reported as installed (check: dkms status amdgpu)"
+    warn "amdgpu DKMS module not reported as installed (check: dkms status)"
   fi
 fi
 
