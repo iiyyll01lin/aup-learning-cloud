@@ -6,6 +6,8 @@
 #   sudo ./auplc-gpu-doctor.sh --smoke   # diagnose + run a GPU compute smoke test (docker)
 #   sudo ./auplc-gpu-doctor.sh --fix     # diagnose, then upgrade amdgpu-dkms to the required
 #                                        # release and rebuild DKMS (reboot afterwards)
+#   sudo ./auplc-gpu-doctor.sh --pin     # hold driver at baseline + pin the boot kernel (opt-in)
+#   sudo ./auplc-gpu-doctor.sh --unpin   # remove those holds (allow updates again)
 #
 # Why this exists: the host amdgpu kernel/DKMS driver must keep up with the ROCm
 # userspace shipped inside the course containers. On gfx1151 an older driver
@@ -28,8 +30,10 @@ for arg in "$@"; do
     --fix)   MODE="fix" ;;
     --check) MODE="check" ;;
     --smoke) RUN_SMOKE=1 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
-    *) echo "Unknown arg: $arg (use --check | --fix | --smoke)"; exit 2 ;;
+    --pin|--pin-kernel) MODE="pin" ;;
+    --unpin) MODE="unpin" ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    *) echo "Unknown arg: $arg (use --check | --smoke | --fix | --pin | --unpin)"; exit 2 ;;
   esac
 done
 
@@ -104,7 +108,80 @@ smoke_gpu(){
   fi
 }
 
+# --- version pinning (opt-in hardening) -----------------------------------
+# Pin only what caused the incident: the GPU driver (must match the container
+# ROCm) and the boot kernel (must stay on the validated OEM line, not auto-jump
+# to an unvalidated one). Deliberately minimal - ROCm apt / k3s / etc are NOT
+# pinned. Fully reversible with --unpin.
+DRIVER_PKGS="amdgpu-dkms amdgpu-dkms-firmware amdgpu-install"
+
+oem_kernel_metas(){
+  dpkg-query -W -f='${Package}\n' 'linux-oem-24.04*' 2>/dev/null \
+    | grep -E '^linux-oem-24\.04[a-z]?$' || true
+}
+
+show_holds(){
+  local h se
+  h="$(apt-mark showhold 2>/dev/null | grep -E 'amdgpu|linux-image|linux-oem' | tr '\n' ' ')"
+  [ -n "$h" ] && info "held: ${h}" || info "no amdgpu/kernel packages held"
+  se="$(grub-editenv - list 2>/dev/null | sed -n 's/^saved_entry=//p')"
+  [ -n "$se" ] && info "GRUB saved_entry: ${se}"
+}
+
+pin_grub_default(){
+  local rel="$1" cfg=/boot/grub/grub.cfg gd=/etc/default/grub entry sub target
+  [ -r "$cfg" ] || { warn "cannot read $cfg; skipping GRUB default pin"; return 0; }
+  entry="$(grep -E "menuentry .*'gnulinux-${rel}-[^']*'" "$cfg" | grep -v recovery \
+            | sed -n "s/.*\$menuentry_id_option '\([^']*\)'.*/\1/p" | head -1)"
+  [ -z "$entry" ] && { warn "no GRUB menuentry for $rel; skipping default pin"; return 0; }
+  sub="$(sed -n "s/^submenu '[^']*' \$menuentry_id_option '\([^']*\)'.*/\1/p" "$cfg" | head -1)"
+  target="$entry"; [ -n "$sub" ] && target="${sub}>${entry}"
+  if grep -q '^GRUB_DEFAULT=' "$gd"; then
+    sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' "$gd"
+  else
+    echo 'GRUB_DEFAULT=saved' >> "$gd"
+  fi
+  update-grub >/dev/null 2>&1 || true
+  grub-set-default "$target" 2>/dev/null || grub-editenv - set saved_entry="$target" 2>/dev/null || true
+  ok "GRUB default pinned to $rel"
+}
+
+do_pin(){
+  local krel rel metas kpkgs
+  krel="$(uname -r)"
+  rel="$(installed_release)"
+  if [ "$(rel_to_num "$rel")" -lt "$REQUIRED_NUM" ] 2>/dev/null; then
+    bad "amdgpu release ${rel} is below baseline ${REQUIRED_RELEASE}; run 'sudo $0 --fix' before --pin."
+    return 1
+  fi
+  echo "--- Applying pins (driver ${rel}, kernel ${krel}) ---"
+  act "holding GPU driver: ${DRIVER_PKGS}"
+  apt-mark hold ${DRIVER_PKGS} >/dev/null 2>&1 || warn "could not hold some driver packages"
+  pin_grub_default "$krel"
+  metas="$(oem_kernel_metas | tr '\n' ' ')"
+  kpkgs="linux-image-${krel} ${metas}"
+  act "holding kernel: ${kpkgs}"
+  apt-mark hold ${kpkgs} >/dev/null 2>&1 || warn "could not hold some kernel packages"
+  warn "kernel packages are now HELD and will NOT get security updates until 'sudo $0 --unpin'."
+  echo ""
+  ok "Pins applied (driver + boot kernel). Reboot once to confirm it boots ${krel}."
+  show_holds
+}
+
+do_unpin(){
+  local metas
+  echo "--- Removing pins ---"
+  act "unholding driver + kernel packages"
+  apt-mark unhold ${DRIVER_PKGS} "linux-image-$(uname -r)" >/dev/null 2>&1 || true
+  metas="$(oem_kernel_metas)"
+  [ -n "$metas" ] && printf '%s\n' "$metas" | xargs -r apt-mark unhold >/dev/null 2>&1 || true
+  ok "Holds removed. GRUB default left as 'saved'; to always boot newest set GRUB_DEFAULT=0 in /etc/default/grub then run update-grub."
+  show_holds
+}
+
 echo "== AUPLC GPU driver doctor ($(date)) mode=$MODE =="
+if [ "$MODE" = "pin" ];   then do_pin;   exit $?; fi
+if [ "$MODE" = "unpin" ]; then do_unpin; exit $?; fi
 echo "--- Diagnosis ---"
 info "kernel: $(uname -r)"
 info "GPU:    $(detect_gpu)"
@@ -113,6 +190,7 @@ REL="$(installed_release)"
 REL_NUM="$(rel_to_num "$REL")"
 SYS_VER="$(cat /sys/module/amdgpu/version 2>/dev/null || echo 'n/a')"
 info "amdgpu release: ${REL} (module ${SYS_VER}); required >= ${REQUIRED_RELEASE}"
+show_holds
 
 NEED_FIX=0
 

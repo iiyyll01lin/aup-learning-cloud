@@ -193,6 +193,8 @@ sudo FIX_GPU=1 ./demo-setup.sh   # auto-upgrade the driver, reboot, and continue
 | `--check` (default) | Print GPU + amdgpu release vs 31.30 + DKMS + dmesg fault scan; exit 1 if below baseline. · 印出 GPU、amdgpu 版本、DKMS、dmesg page fault；低於基線回傳 1。 |
 | `--smoke` | Also run `torch.ones(8)` on the GPU inside a cached `auplc-*gfx*` image. · 另在 cached GPU image 內實際跑一次 GPU 運算。 |
 | `--fix` | Upgrade amdgpu to 31.30 + rebuild DKMS (reboot afterwards). · 升級到 31.30 並重建 DKMS（之後需重開）。 |
+| `--pin` / `--pin-kernel` | Hold the driver at baseline + pin the boot kernel (opt-in; blocks kernel/driver updates until `--unpin`). · 鎖驅動於基線 + 釘開機 kernel（選用；會擋更新直到 `--unpin`）。 |
+| `--unpin` | Remove those holds (allow updates again). · 解除鎖定（恢復更新）。 |
 
 The required release is defined once at the top of the script
 (`REQUIRED_RELEASE="31.30"`); keep it in sync with the ansible rocm role.
